@@ -1,0 +1,24 @@
+# Ambiente
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Dados e artefatos (nunca commitar documentos médicos nem vetores)
+data/raw/
+data/processed/
+chroma_db/
+logs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp

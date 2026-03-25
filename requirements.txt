@@ -1,0 +1,34 @@
+# LLM / RAG
+langchain==0.3.25
+langchain-openai==0.3.16
+langchain-chroma==0.2.4
+langchain-community==0.3.24
+
+# Vector store
+chromadb==1.0.7
+
+# PDF
+pdfplumber==0.11.6
+PyMuPDF==1.25.5
+
+# API
+fastapi==0.115.13
+uvicorn[standard]==0.34.3
+python-multipart==0.0.20
+slowapi==0.1.9
+
+# UI
+streamlit==1.45.1
+httpx==0.28.1
+
+# Config / validação
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+
+# Logging
+python-json-logger==3.3.0
+
+# Avaliação
+ragas==0.2.15
+datasets==3.6.0
