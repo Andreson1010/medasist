@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import ConfigDict
+
 from langchain_chroma import Chroma
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
@@ -34,11 +36,10 @@ class _MultiStoreRetriever(BaseRetriever):
         Configurações com ``retrieval_top_k`` e ``retrieval_score_threshold``.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     stores: dict[DocType, Any]
     settings: Settings
-
-    class Config:
-        arbitrary_types_allowed = True
 
     def _get_relevant_documents(
         self,
@@ -58,7 +59,7 @@ def build_retriever(
     stores: dict[DocType, Chroma],
     settings: Settings,
 ) -> BaseRetriever:
-    """Constrói retriever MMR sobre um ou mais vectorstores.
+    """Constrói retriever por similaridade sobre um ou mais vectorstores.
 
     Parameters
     ----------
@@ -117,6 +118,7 @@ def retrieve(
     threshold = settings.retrieval_score_threshold
 
     candidates: list[tuple[Document, float]] = []
+    failed_stores: list[str] = []
 
     for doc_type, store in stores.items():
         try:
@@ -134,13 +136,21 @@ def retrieve(
                     candidates.append((doc, score))
         except Exception:
             logger.exception("Erro ao consultar store '%s'", doc_type.value)
+            failed_stores.append(doc_type.value)
 
     if not candidates:
-        logger.info(
-            "Cold start: nenhum chunk com distância L2 <= %.3f para query '%s'",
-            threshold,
-            query[:50],
-        )
+        if failed_stores:
+            logger.error(
+                "Nenhum resultado: falha de infra em store(s) %s para query '%s'",
+                failed_stores,
+                query[:50],
+            )
+        else:
+            logger.info(
+                "Cold start: nenhum chunk com distância L2 <= %.3f para query '%s'",
+                threshold,
+                query[:50],
+            )
         return []
 
     # Remove duplicatas por page_content, mantém o de menor distância

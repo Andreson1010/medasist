@@ -154,7 +154,7 @@ def test_retrieve_multi_doctype_searches_all_collections(stores_with_docs, setti
 
     doc_types_found = {d.metadata.get("doc_type") for d in docs if d.metadata}
     # Deve ter encontrado docs de ambos os stores
-    assert len(docs) >= 1
+    assert doc_types_found == {"bula", "diretriz"}
 
 
 def test_retrieve_respects_top_k(client, embeddings, settings):
