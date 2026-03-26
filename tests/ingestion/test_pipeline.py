@@ -53,8 +53,9 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def chroma() -> chromadb.ClientAPI:
-    return chromadb.EphemeralClient()
+def chroma(tmp_path) -> chromadb.ClientAPI:
+    """PersistentClient em diretório temporário — isolado por teste."""
+    return chromadb.PersistentClient(path=str(tmp_path / "chroma"))
 
 
 # ---------------------------------------------------------------------------
