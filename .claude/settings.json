@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(black:*)",
+      "Bash(flake8:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(docker:*)",
+      "Bash(docker compose:*)"
+    ],
+    "deny": []
+  }
+}
