@@ -197,11 +197,11 @@ def test_full_text_skips_whitespace_only_pages() -> None:
         path=Path("/tmp/teste.pdf"),
         doc_type=DocType.BULA,
         sha256="abc123",
-        pages=[
+        pages=(
             PageContent(page_number=1, text="Conteúdo real da bula com informações."),
             PageContent(page_number=2, text="   "),
             PageContent(page_number=3, text="Outra página com dados relevantes."),
-        ],
+        ),
     )
 
     assert "   " not in doc.full_text

@@ -27,7 +27,7 @@ def _make_doc(path: Path, doc_type: DocType, sha256: str, text: str = _LONG_TEXT
         path=path.resolve(),
         doc_type=doc_type,
         sha256=sha256,
-        pages=[PageContent(page_number=1, text=text)],
+        pages=(PageContent(page_number=1, text=text),),
     )
 
 

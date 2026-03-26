@@ -7,7 +7,7 @@ from pathlib import Path
 
 import chromadb
 
-from medasist.config import Settings, get_settings
+from medasist.config import Settings
 from medasist.ingestion.chunker import chunk_document
 from medasist.ingestion.loader import load_pdf
 from medasist.ingestion.metadata import build_metadata_batch
@@ -172,8 +172,19 @@ def ingest_document(
         for m in metadata_list
     ]
 
-    embeddings = embed_fn(texts)
-    collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+    try:
+        embeddings = embed_fn(texts)
+        collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+    except Exception as exc:
+        logger.error("Falha ao indexar chunks de %s: %s", path.name, exc)
+        return IngestionResult(
+            path=path,
+            doc_type=doc_type,
+            sha256=doc.sha256,
+            chunks_indexed=0,
+            skipped=False,
+            error=str(exc),
+        )
 
     logger.info("Indexados %d chunks de %s → coleção '%s'", len(chunks), path.name, col_name)
     return IngestionResult(

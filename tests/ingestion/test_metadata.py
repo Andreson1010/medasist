@@ -51,7 +51,7 @@ def test_build_metadata_doc_type_is_string():
 def test_build_metadata_source_path_is_string():
     chunk = _make_chunk()
     result = build_metadata(chunk)
-    assert result.source_path == str(FAKE_PATH)
+    assert result.source_path == FAKE_PATH.name
     assert isinstance(result.source_path, str)
 
 
