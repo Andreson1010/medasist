@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 import chromadb
@@ -21,10 +22,15 @@ _COLLECTION_ATTR: dict[DocType, str] = {
 }
 
 _client: chromadb.PersistentClient | None = None
+_client_path: Path | None = None
+_client_lock = threading.Lock()
 
 
 def get_client(settings: Settings) -> chromadb.PersistentClient:
     """Retorna singleton do PersistentClient ChromaDB.
+
+    Usa double-checked locking para segurança em contextos multi-thread.
+    Emite aviso se chamado com ``chroma_dir`` diferente do inicializado.
 
     Parameters
     ----------
@@ -36,12 +42,26 @@ def get_client(settings: Settings) -> chromadb.PersistentClient:
     chromadb.PersistentClient
         Cliente singleton para o processo.
     """
-    global _client
+    global _client, _client_path
+
     if _client is None:
-        path = Path(settings.chroma_dir)
-        path.mkdir(parents=True, exist_ok=True)
-        _client = chromadb.PersistentClient(path=str(path))
-        logger.info("ChromaDB PersistentClient inicializado em %s", path)
+        with _client_lock:
+            if _client is None:
+                path = Path(settings.chroma_dir)
+                path.mkdir(parents=True, exist_ok=True)
+                _client = chromadb.PersistentClient(path=str(path))
+                _client_path = path
+                logger.info("ChromaDB PersistentClient inicializado em %s", path)
+    else:
+        requested = Path(settings.chroma_dir)
+        if requested != _client_path:
+            logger.warning(
+                "get_client chamado com chroma_dir='%s', mas singleton já "
+                "inicializado em '%s'. Retornando cliente existente.",
+                requested,
+                _client_path,
+            )
+
     return _client
 
 
@@ -66,7 +86,10 @@ def build_embeddings(settings: Settings) -> OpenAIEmbeddings:
 
 
 def _collection_name(doc_type: DocType, settings: Settings) -> str:
-    return getattr(settings, _COLLECTION_ATTR[doc_type])
+    attr = _COLLECTION_ATTR.get(doc_type)
+    if attr is None:
+        raise ValueError(f"DocType sem coleção mapeada: {doc_type!r}")
+    return getattr(settings, attr)
 
 
 def get_vectorstore(
@@ -92,13 +115,23 @@ def get_vectorstore(
     -------
     Chroma
         Vectorstore LangChain pronto para add_texts / similarity_search.
+
+    Raises
+    ------
+    RuntimeError
+        Se o ChromaDB não conseguir criar ou abrir a coleção.
     """
     name = _collection_name(doc_type, settings)
-    store = Chroma(
-        client=client,
-        collection_name=name,
-        embedding_function=embeddings,
-    )
+    try:
+        store = Chroma(
+            client=client,
+            collection_name=name,
+            embedding_function=embeddings,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Falha ao abrir vectorstore '{name}' para {doc_type.value}: {exc}"
+        ) from exc
     logger.debug("Vectorstore '%s' pronto (%s)", name, doc_type.value)
     return store
 
