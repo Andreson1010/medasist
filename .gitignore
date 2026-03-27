@@ -22,3 +22,7 @@ logs/
 .vscode/
 .idea/
 *.swp
+
+# Projeto local (não versionado)
+.claude/
+todo/

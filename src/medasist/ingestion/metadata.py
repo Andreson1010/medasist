@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from medasist.ingestion.chunker import TextChunk
 from medasist.ingestion.schemas import DocType
@@ -50,7 +49,7 @@ def build_metadata(chunk: TextChunk) -> ChunkMetadata:
     """
     return ChunkMetadata(
         doc_type=chunk.doc_type.value,
-        source_path=str(chunk.source_path),
+        source_path=chunk.source_path.name,
         sha256=chunk.sha256,
         chunk_index=chunk.chunk_index,
         char_count=len(chunk.text),

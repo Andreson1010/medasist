@@ -21,7 +21,7 @@ def _make_doc(doc_type: DocType, text: str) -> LoadedDocument:
         path=FAKE_PATH,
         doc_type=doc_type,
         sha256=FAKE_SHA,
-        pages=[PageContent(page_number=1, text=text)],
+        pages=(PageContent(page_number=1, text=text),),
     )
 
 
@@ -116,7 +116,7 @@ def test_chunk_empty_document_returns_empty_list(settings):
         path=FAKE_PATH,
         doc_type=DocType.BULA,
         sha256=FAKE_SHA,
-        pages=[],
+        pages=(),
     )
     chunks = chunk_document(doc, settings)
     assert chunks == []

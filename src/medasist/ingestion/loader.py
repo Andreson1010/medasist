@@ -61,7 +61,7 @@ def load_pdf(path: Path, doc_type: DocType) -> LoadedDocument:
 
     pages_with_text = sum(1 for p in pages if p.text.strip())
     logger.info("PDF %s carregado: %d página(s) com texto.", path.name, pages_with_text)
-    return LoadedDocument(path=path, doc_type=doc_type, pages=pages, sha256=sha256)
+    return LoadedDocument(path=path, doc_type=doc_type, pages=tuple(pages), sha256=sha256)
 
 
 # ---------------------------------------------------------------------------
