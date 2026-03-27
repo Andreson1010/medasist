@@ -8,38 +8,6 @@ from medasist.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
-_PROMPT_TEMPLATES: dict[str, str] = {
-    "medico": (
-        "Você é um assistente médico especializado. Responda de forma técnica, "
-        "incluindo mecanismo de ação, posologia e contraindicações "
-        "quando relevante.\n\n"
-        "Contexto:\n{context}\n\n"
-        "Pergunta: {question}\n\n"
-        "Resposta:"
-    ),
-    "enfermeiro": (
-        "Você é um assistente de enfermagem. Responda de forma clínico-prática, "
-        "com foco em administração, cuidados e observações de enfermagem.\n\n"
-        "Contexto:\n{context}\n\n"
-        "Pergunta: {question}\n\n"
-        "Resposta:"
-    ),
-    "assistente": (
-        "Você é um assistente de saúde. Responda de forma objetiva, "
-        "com foco em triagem inicial e encaminhamento adequado.\n\n"
-        "Contexto:\n{context}\n\n"
-        "Pergunta: {question}\n\n"
-        "Resposta:"
-    ),
-    "paciente": (
-        "Você é um assistente de saúde. Responda em linguagem simples e acessível, "
-        "sem jargão médico, de forma clara e tranquilizadora.\n\n"
-        "Contexto:\n{context}\n\n"
-        "Pergunta: {question}\n\n"
-        "Resposta:"
-    ),
-}
-
 
 class UserProfile(str, Enum):
     """Papel do usuário no sistema MedAssist.
@@ -52,6 +20,39 @@ class UserProfile(str, Enum):
     ENFERMEIRO = "enfermeiro"
     ASSISTENTE = "assistente"
     PACIENTE = "paciente"
+
+
+PROMPT_TEMPLATES: dict[UserProfile, str] = {
+    UserProfile.MEDICO: (
+        "Você é um assistente médico especializado. Responda de forma técnica, "
+        "incluindo mecanismo de ação, posologia e contraindicações "
+        "quando relevante.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Pergunta: {question}\n\n"
+        "Resposta:"
+    ),
+    UserProfile.ENFERMEIRO: (
+        "Você é um assistente de enfermagem. Responda de forma clínico-prática, "
+        "com foco em administração, cuidados e observações de enfermagem.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Pergunta: {question}\n\n"
+        "Resposta:"
+    ),
+    UserProfile.ASSISTENTE: (
+        "Você é um assistente de saúde. Responda de forma objetiva, "
+        "com foco em triagem inicial e encaminhamento adequado.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Pergunta: {question}\n\n"
+        "Resposta:"
+    ),
+    UserProfile.PACIENTE: (
+        "Você é um assistente de saúde. Responda em linguagem simples e acessível, "
+        "sem jargão médico, de forma clara e tranquilizadora.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Pergunta: {question}\n\n"
+        "Resposta:"
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -94,20 +95,32 @@ def get_profile_config(
     Raises
     ------
     ValueError
-        Se o perfil não tiver configuração mapeada (nunca deve ocorrer).
+        Se ``Settings`` não possuir os atributos esperados para o perfil,
+        ou se o perfil não tiver template configurado.
     """
     if settings is None:
         settings = get_settings()
 
     key = profile.value
-    temperature = getattr(settings, f"{key}_temperature")
-    max_tokens = getattr(settings, f"{key}_max_tokens")
-    prompt_template = _PROMPT_TEMPLATES.get(key)
+    attr_temp = f"{key}_temperature"
+    attr_tokens = f"{key}_max_tokens"
+
+    if not hasattr(settings, attr_temp) or not hasattr(settings, attr_tokens):
+        raise ValueError(
+            f"Settings não possui atributos para o perfil '{key}'. "
+            f"Esperados: '{attr_temp}', '{attr_tokens}'."
+        )
+
+    temperature = getattr(settings, attr_temp)
+    max_tokens = getattr(settings, attr_tokens)
+    prompt_template = PROMPT_TEMPLATES.get(profile)
 
     if prompt_template is None:
         raise ValueError(f"Perfil sem template configurado: {profile!r}")
 
-    logger.debug("ProfileConfig carregado: profile=%s temperature=%s", key, temperature)
+    logger.debug(
+        "ProfileConfig carregado: profile=%s temperature=%s", key, temperature
+    )
 
     return ProfileConfig(
         temperature=temperature,

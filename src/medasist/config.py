@@ -121,14 +121,14 @@ class Settings(BaseSettings):
     collection_manuais: str = Field(default="manuais")
 
     # Profiles — temperaturas e max_tokens por papel
-    medico_temperature: float = Field(default=0.1)
-    medico_max_tokens: int = Field(default=1024)
-    enfermeiro_temperature: float = Field(default=0.15)
-    enfermeiro_max_tokens: int = Field(default=1024)
-    assistente_temperature: float = Field(default=0.2)
-    assistente_max_tokens: int = Field(default=512)
-    paciente_temperature: float = Field(default=0.3)
-    paciente_max_tokens: int = Field(default=512)
+    medico_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
+    medico_max_tokens: int = Field(default=1024, gt=0)
+    enfermeiro_temperature: float = Field(default=0.15, ge=0.0, le=2.0)
+    enfermeiro_max_tokens: int = Field(default=1024, gt=0)
+    assistente_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    assistente_max_tokens: int = Field(default=512, gt=0)
+    paciente_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
+    paciente_max_tokens: int = Field(default=512, gt=0)
 
     # Textos fixos de segurança
     disclaimer: str = Field(
