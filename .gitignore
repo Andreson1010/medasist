@@ -26,3 +26,4 @@ logs/
 # Projeto local (não versionado)
 .claude/
 todo/
+docs/adr/
