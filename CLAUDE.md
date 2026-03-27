@@ -99,3 +99,12 @@ from __future__ import annotations
 
 - Branches: `feat/`, `fix/`, `refactor/`, `data/`
 - Commits em português, imperativo: `feat: adiciona endpoint de consulta RAG`
+
+## Regras de Code Review (Checklist para o Claude)
+
+Sempre que eu solicitar um review (/code-review), verifique:
+1. **Lógica e Bugs**: Identifique possíveis NullPointerExceptions, loops infinitos ou condições de corrida.
+2. **Early Returns**: Garanta o uso de "fail-fast" para evitar aninhamento excessivo de `if/else`.
+3. **Nomenclatura**: Variáveis devem ser descritivas. Evite nomes genéricos como `data` ou `info`.
+4. **Segurança**: Bloqueie qualquer hardcoded de segredos (API Keys, senhas) ou SQL Injection.
+5. **Dívida Técnica**: Sugira refatoração se uma função tiver mais de 20 linhas.
