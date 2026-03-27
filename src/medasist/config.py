@@ -46,6 +46,22 @@ class Settings(BaseSettings):
         Número de chunks recuperados por consulta.
     retrieval_score_threshold : float
         Score mínimo de similaridade; abaixo disso aciona cold start.
+    medico_temperature : float
+        Temperatura do LLM para o perfil MEDICO (padrão: 0.1).
+    medico_max_tokens : int
+        Máximo de tokens gerados para o perfil MEDICO (padrão: 1024).
+    enfermeiro_temperature : float
+        Temperatura do LLM para o perfil ENFERMEIRO (padrão: 0.15).
+    enfermeiro_max_tokens : int
+        Máximo de tokens gerados para o perfil ENFERMEIRO (padrão: 1024).
+    assistente_temperature : float
+        Temperatura do LLM para o perfil ASSISTENTE (padrão: 0.2).
+    assistente_max_tokens : int
+        Máximo de tokens gerados para o perfil ASSISTENTE (padrão: 512).
+    paciente_temperature : float
+        Temperatura do LLM para o perfil PACIENTE (padrão: 0.3).
+    paciente_max_tokens : int
+        Máximo de tokens gerados para o perfil PACIENTE (padrão: 512).
     """
 
     model_config = SettingsConfigDict(
@@ -103,6 +119,16 @@ class Settings(BaseSettings):
     collection_diretrizes: str = Field(default="diretrizes")
     collection_protocolos: str = Field(default="protocolos")
     collection_manuais: str = Field(default="manuais")
+
+    # Profiles — temperaturas e max_tokens por papel
+    medico_temperature: float = Field(default=0.1)
+    medico_max_tokens: int = Field(default=1024)
+    enfermeiro_temperature: float = Field(default=0.15)
+    enfermeiro_max_tokens: int = Field(default=1024)
+    assistente_temperature: float = Field(default=0.2)
+    assistente_max_tokens: int = Field(default=512)
+    paciente_temperature: float = Field(default=0.3)
+    paciente_max_tokens: int = Field(default=512)
 
     # Textos fixos de segurança
     disclaimer: str = Field(
