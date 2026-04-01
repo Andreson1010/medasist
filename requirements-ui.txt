@@ -1,0 +1,8 @@
+# UI
+streamlit==1.45.1
+httpx==0.28.1
+
+# Config / validação
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0

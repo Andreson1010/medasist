@@ -1,0 +1,14 @@
+services:
+  api:
+    volumes:
+      - ./src:/app/src
+    command: >
+      python -m uvicorn medasist.api.main:app
+      --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
+
+  ui:
+    volumes:
+      - ./src/medasist/ui:/app/src/medasist/ui
+    command: >
+      python -m streamlit run src/medasist/ui/app.py
+      --server.address=0.0.0.0 --server.port=8501 --server.runOnSave=true
