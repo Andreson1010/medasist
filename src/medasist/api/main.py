@@ -14,7 +14,11 @@ from medasist.api.routers.query import router as query_router
 from medasist.config import get_settings
 from medasist.generation.chain import build_chain
 from medasist.profiles.schemas import UserProfile
-from medasist.vectorstore.store import get_all_vectorstores
+from medasist.vectorstore.store import (
+    build_embeddings,
+    get_all_vectorstores,
+    get_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +37,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         Instância da aplicação.
     """
     settings = get_settings()
-    stores = get_all_vectorstores(settings)
+    client = get_client(settings)
+    embeddings = build_embeddings(settings)
+    stores = get_all_vectorstores(client, embeddings, settings)
 
     app.state.chains = {
-        profile: build_chain(stores, profile, settings)
-        for profile in UserProfile
+        profile: build_chain(stores, profile, settings) for profile in UserProfile
     }
 
     logger.info("Lifespan: %d chains aquecidas.", len(app.state.chains))
@@ -48,7 +53,8 @@ app = FastAPI(
     title="MedAssist RAG API",
     description=(
         "API de suporte à decisão médica baseada em RAG. "
-        "Este sistema é um auxiliar informativo e não substitui avaliação médica presencial."
+        "Este sistema é um auxiliar informativo e não substitui "
+        "avaliação médica presencial."
     ),
     version="0.1.0",
     lifespan=lifespan,

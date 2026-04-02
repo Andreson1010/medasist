@@ -10,7 +10,11 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
 
 from medasist.config import Settings, get_settings
-from medasist.generation.citations import CitationItem, build_citations, validate_citations
+from medasist.generation.citations import (
+    CitationItem,
+    build_citations,
+    validate_citations,
+)
 from medasist.generation.prompts import PromptRegistry
 from medasist.profiles.schemas import UserProfile, get_profile_config
 from medasist.retrieval.retriever import build_retriever

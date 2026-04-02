@@ -22,33 +22,41 @@ class UserProfile(str, Enum):
     PACIENTE = "paciente"
 
 
+_CITATION_INSTRUCTION = (
+    "Use os marcadores [N] para citar as fontes do contexto. "
+    "Toda afirmação deve referenciar ao menos um [N]. "
+    "Exemplo: 'A dose recomendada é 10 mg/dia [1].'\n\n"
+)
+
 PROMPT_TEMPLATES: dict[UserProfile, str] = {
     UserProfile.MEDICO: (
         "Você é um assistente médico especializado. Responda de forma técnica, "
         "incluindo mecanismo de ação, posologia e contraindicações "
-        "quando relevante.\n\n"
-        "Contexto:\n{context}\n\n"
+        "quando relevante.\n\n" + _CITATION_INSTRUCTION + "Contexto:\n{context}\n\n"
         "Pergunta: {question}\n\n"
         "Resposta:"
     ),
     UserProfile.ENFERMEIRO: (
         "Você é um assistente de enfermagem. Responda de forma clínico-prática, "
         "com foco em administração, cuidados e observações de enfermagem.\n\n"
-        "Contexto:\n{context}\n\n"
+        + _CITATION_INSTRUCTION
+        + "Contexto:\n{context}\n\n"
         "Pergunta: {question}\n\n"
         "Resposta:"
     ),
     UserProfile.ASSISTENTE: (
         "Você é um assistente de saúde. Responda de forma objetiva, "
         "com foco em triagem inicial e encaminhamento adequado.\n\n"
-        "Contexto:\n{context}\n\n"
+        + _CITATION_INSTRUCTION
+        + "Contexto:\n{context}\n\n"
         "Pergunta: {question}\n\n"
         "Resposta:"
     ),
     UserProfile.PACIENTE: (
         "Você é um assistente de saúde. Responda em linguagem simples e acessível, "
         "sem jargão médico, de forma clara e tranquilizadora.\n\n"
-        "Contexto:\n{context}\n\n"
+        + _CITATION_INSTRUCTION
+        + "Contexto:\n{context}\n\n"
         "Pergunta: {question}\n\n"
         "Resposta:"
     ),
@@ -118,9 +126,7 @@ def get_profile_config(
     if prompt_template is None:
         raise ValueError(f"Perfil sem template configurado: {profile!r}")
 
-    logger.debug(
-        "ProfileConfig carregado: profile=%s temperature=%s", key, temperature
-    )
+    logger.debug("ProfileConfig carregado: profile=%s temperature=%s", key, temperature)
 
     return ProfileConfig(
         temperature=temperature,

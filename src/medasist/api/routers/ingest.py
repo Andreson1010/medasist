@@ -6,7 +6,16 @@ import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 
 from medasist.api.deps import limiter
 from medasist.api.schemas import IngestResponse
@@ -20,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def verify_admin_key(x_admin_key: str = Header(...)) -> None:
+def verify_admin_key(x_admin_key: Annotated[str, Header()]) -> None:
     """Valida o header X-Admin-Key contra a chave configurada.
 
     Usa ``secrets.compare_digest`` para comparação timing-safe.
@@ -39,7 +48,9 @@ def verify_admin_key(x_admin_key: str = Header(...)) -> None:
     expected = settings.admin_api_key.get_secret_value()
     if not secrets.compare_digest(x_admin_key, expected):
         logger.warning("ingest: tentativa com chave de admin inválida.")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de admin inválida.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de admin inválida."
+        )
 
 
 @limiter.limit("5/minute")

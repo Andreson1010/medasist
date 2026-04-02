@@ -23,7 +23,9 @@ router = APIRouter()
         "e retorna a resposta com citações e disclaimer médico obrigatório."
     ),
 )
-async def query(request: Request, body: Annotated[QueryRequest, Body()]) -> QueryResponse:
+async def query(
+    request: Request, body: Annotated[QueryRequest, Body()]
+) -> QueryResponse:
     """Executa consulta RAG para o perfil e pergunta informados.
 
     Parameters

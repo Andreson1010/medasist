@@ -46,7 +46,9 @@ class TextChunk:
     chunk_index: int
 
 
-def _get_splitter(doc_type: DocType, settings: Settings) -> RecursiveCharacterTextSplitter:
+def _get_splitter(
+    doc_type: DocType, settings: Settings
+) -> RecursiveCharacterTextSplitter:
     """Retorna o splitter configurado para o DocType informado.
 
     Parameters
@@ -110,5 +112,7 @@ def chunk_document(doc: LoadedDocument, settings: Settings) -> list[TextChunk]:
         )
         index += 1
 
-    logger.info("Documento %s → %d chunks (%s)", doc.path.name, len(chunks), doc.doc_type)
+    logger.info(
+        "Documento %s → %d chunks (%s)", doc.path.name, len(chunks), doc.doc_type
+    )
     return chunks

@@ -164,5 +164,7 @@ def retrieve(
     sorted_docs = sorted(seen.values(), key=lambda x: x[1])
     top_docs = [doc for doc, _ in sorted_docs[:k]]
 
-    logger.debug("retrieve retorna %d documento(s) após deduplicação e top_k.", len(top_docs))
+    logger.debug(
+        "retrieve retorna %d documento(s) após deduplicação e top_k.", len(top_docs)
+    )
     return top_docs

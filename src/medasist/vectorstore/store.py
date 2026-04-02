@@ -82,6 +82,7 @@ def build_embeddings(settings: Settings) -> OpenAIEmbeddings:
         base_url=settings.lm_studio_base_url,
         api_key=settings.lm_studio_api_key.get_secret_value(),
         model=settings.lm_studio_embedding_model,
+        check_embedding_ctx_length=False,
     )
 
 

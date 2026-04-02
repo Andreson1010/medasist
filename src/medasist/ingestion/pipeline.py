@@ -72,6 +72,7 @@ def build_embed_fn(settings: Settings) -> EmbedFn:
         base_url=settings.lm_studio_base_url,
         api_key=settings.lm_studio_api_key.get_secret_value(),
         model=settings.lm_studio_embedding_model,
+        check_embedding_ctx_length=False,
     )
     return embeddings.embed_documents
 
@@ -174,7 +175,9 @@ def ingest_document(
 
     try:
         embeddings = embed_fn(texts)
-        collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+        collection.upsert(
+            ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas
+        )
     except Exception as exc:
         logger.error("Falha ao indexar chunks de %s: %s", path.name, exc)
         return IngestionResult(
@@ -186,7 +189,9 @@ def ingest_document(
             error=str(exc),
         )
 
-    logger.info("Indexados %d chunks de %s → coleção '%s'", len(chunks), path.name, col_name)
+    logger.info(
+        "Indexados %d chunks de %s → coleção '%s'", len(chunks), path.name, col_name
+    )
     return IngestionResult(
         path=path,
         doc_type=doc_type,
@@ -245,7 +250,9 @@ def ingest_directory(
         result = ingest_document(pdf_path, doc_type, chroma_client, settings, embed_fn)
         results.append(result)
 
-    processed = sum(1 for r in results if not r.skipped and not r.error and r.chunks_indexed > 0)
+    processed = sum(
+        1 for r in results if not r.skipped and not r.error and r.chunks_indexed > 0
+    )
     skipped = sum(1 for r in results if r.skipped)
     errors = sum(1 for r in results if r.error)
     logger.info(

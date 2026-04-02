@@ -53,8 +53,11 @@ class PromptRegistry:
             with self._lock:
                 if profile not in self._cache:
                     template_str = PROMPT_TEMPLATES[profile]
-                    self._cache[profile] = ChatPromptTemplate.from_template(template_str)
+                    self._cache[profile] = ChatPromptTemplate.from_template(
+                        template_str
+                    )
                     logger.debug(
-                        "PromptRegistry: template construído para perfil '%s'.", profile.value
+                        "PromptRegistry: template construído para perfil '%s'.",
+                        profile.value,
                     )
         return self._cache[profile]

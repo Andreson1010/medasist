@@ -26,7 +26,10 @@ class QueryRequest(BaseModel):
     profile: UserProfile
     doc_types: list[DocType] | None = Field(
         default=None,
-        description="Reservado — filtragem por tipo de documento será suportada em versão futura.",
+        description=(
+            "Reservado — filtragem por tipo de documento "
+            "será suportada em versão futura."
+        ),
     )
 
 

@@ -53,7 +53,7 @@ def build_citations(docs: list[Document]) -> list[CitationItem]:
         citations.append(
             CitationItem(
                 index=i,
-                source=meta.get("source", ""),
+                source=meta.get("source_path", meta.get("source", "")),
                 section=meta.get("section", ""),
                 page=str(meta.get("page", "")),
             )
@@ -88,9 +88,7 @@ def validate_citations(
         ``valid_citations`` contém apenas as citações referenciadas.
     """
     valid_indices: set[int] = {c.index for c in citations}
-    used_indices: set[int] = {
-        int(m) for m in re.findall(r"\[(\d+)\]", answer)
-    }
+    used_indices: set[int] = {int(m) for m in re.findall(r"\[(\d+)\]", answer)}
 
     hallucinated = used_indices - valid_indices
     if hallucinated:
@@ -103,7 +101,9 @@ def validate_citations(
         for idx in hallucinated:
             answer = re.sub(rf"\[{idx}\]", "", answer)
 
-    valid = [c for c in citations if c.index in used_indices and c.index in valid_indices]
+    valid = [
+        c for c in citations if c.index in used_indices and c.index in valid_indices
+    ]
 
     logger.debug(
         "validate_citations: %d/%d citações válidas (usadas na resposta).",

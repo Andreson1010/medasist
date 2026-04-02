@@ -4,7 +4,6 @@ import logging
 from dataclasses import dataclass
 
 from medasist.ingestion.chunker import TextChunk
-from medasist.ingestion.schemas import DocType
 
 logger = logging.getLogger(__name__)
 
