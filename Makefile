@@ -1,5 +1,6 @@
 .PHONY: up down dev build logs ingest test lint format check
 
+
 ## Produção
 up:
 	docker compose up -d
@@ -14,7 +15,15 @@ logs:
 	docker compose logs -f
 
 ## Desenvolvimento (hot reload)
-dev:
+.req-hash:
+	md5sum requirements-api.txt > .req-hash
+
+dev: .req-hash
+	@if ! md5sum -c .req-hash --quiet 2>/dev/null; then \
+		echo "requirements alterado — rebuilding..."; \
+		docker compose build api; \
+		md5sum requirements-api.txt > .req-hash; \
+	fi
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 ## Ingestão de documentos (dentro do container da API)
