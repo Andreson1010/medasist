@@ -9,7 +9,7 @@ from medasist.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 30.0
+DEFAULT_TIMEOUT = 120.0
 
 
 # ---------------------------------------------------------------------------

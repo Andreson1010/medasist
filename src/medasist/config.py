@@ -89,6 +89,7 @@ class Settings(BaseSettings):
 
     # UI
     api_base_url: str = Field(default="http://localhost:8000")
+    ui_request_timeout: float = Field(default=120.0, gt=0)
 
     # Logs
     log_level: str = Field(default="INFO")

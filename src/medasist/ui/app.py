@@ -152,7 +152,12 @@ def _format_citation(c: CitationResult) -> str:
     str
         String no formato ``[N] source — Seção: section, Pág. page``.
     """
-    return f"[{c.index}] {c.source} — Seção: {c.section}, Pág. {c.page}"
+    parts = [f"[{c.index}] {c.source}"]
+    if c.section:
+        parts.append(f"Seção: {c.section}")
+    if c.page:
+        parts.append(f"Pág. {c.page}")
+    return " — ".join(parts)
 
 
 def _render_response(result: QueryResult, settings: Settings) -> None:
@@ -263,10 +268,15 @@ def main() -> None:
                             profile=profile_key,
                             doc_types=doc_type_keys or None,
                             base_url=settings.api_base_url,
+                            timeout=settings.ui_request_timeout,
                         )
                         _render_response(result, settings)
                         st.session_state[_KEY_MESSAGES].append(
-                            {"role": "assistant", "content": result.answer, "result": result}
+                            {
+                                "role": "assistant",
+                                "content": result.answer,
+                                "result": result,
+                            }
                         )
 
                     except APIError as exc:

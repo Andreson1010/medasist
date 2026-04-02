@@ -12,3 +12,4 @@ services:
     command: >
       python -m streamlit run src/medasist/ui/app.py
       --server.address=0.0.0.0 --server.port=8501 --server.runOnSave=true
+      --browser.serverAddress=localhost
