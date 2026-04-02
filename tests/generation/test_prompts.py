@@ -13,7 +13,9 @@ def registry() -> PromptRegistry:
 
 
 class TestPromptRegistry:
-    def test_get_prompt_returns_chat_prompt_template(self, registry: PromptRegistry) -> None:
+    def test_get_prompt_returns_chat_prompt_template(
+        self, registry: PromptRegistry
+    ) -> None:
         prompt = registry.get_prompt(UserProfile.MEDICO)
         assert isinstance(prompt, ChatPromptTemplate)
 
@@ -33,9 +35,12 @@ class TestPromptRegistry:
         assert "context" in variables
         assert "question" in variables
 
-    def test_templates_are_unique_across_profiles(self, registry: PromptRegistry) -> None:
+    def test_templates_are_unique_across_profiles(
+        self, registry: PromptRegistry
+    ) -> None:
         templates = [
-            registry.get_prompt(profile).messages[0].prompt.template  # type: ignore[union-attr]
+            registry.get_prompt(profile)  # type: ignore[union-attr]
+            .messages[0].prompt.template
             for profile in UserProfile
         ]
         assert len(set(templates)) == len(templates), "Perfis têm templates duplicados"

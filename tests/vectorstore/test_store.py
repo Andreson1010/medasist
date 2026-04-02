@@ -90,7 +90,7 @@ def test_get_vectorstore_is_queryable_after_add(client, embeddings, settings):
 def test_get_vectorstore_collections_are_isolated(client, embeddings, settings):
     """Documentos indexados em BULA não aparecem em consultas de DIRETRIZ."""
     bula = get_vectorstore(DocType.BULA, client, embeddings, settings)
-    diretriz = get_vectorstore(DocType.DIRETRIZ, client, embeddings, settings)
+    get_vectorstore(DocType.DIRETRIZ, client, embeddings, settings)
 
     bula.add_texts(["Bula do medicamento Alphazol X."], ids=["bula_001"])
 

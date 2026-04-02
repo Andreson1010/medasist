@@ -58,7 +58,9 @@ def stores_with_docs(client, embeddings, settings):
     )
     store_diretriz = get_vectorstore(DocType.DIRETRIZ, client, embeddings, settings)
     store_diretriz.add_texts(
-        texts=["Diretriz de tratamento da hipertensão: reduzir sal e atividade física."],
+        texts=[
+            "Diretriz de tratamento da hipertensão: reduzir sal e atividade física."
+        ],
         metadatas=[{"doc_type": "diretriz", "source": "htn_guideline.pdf", "page": 3}],
         ids=["dir_001"],
     )
@@ -162,7 +164,9 @@ def test_retrieve_respects_top_k(client, embeddings, settings):
     from medasist.retrieval.retriever import retrieve
 
     store = get_vectorstore(DocType.MANUAL, client, embeddings, settings)
-    texts = [f"Manual seção {i}: conteúdo médico sintético número {i}." for i in range(20)]
+    texts = [
+        f"Manual seção {i}: conteúdo médico sintético número {i}." for i in range(20)
+    ]
     ids = [f"manual_{i:03d}" for i in range(20)]
     store.add_texts(texts=texts, ids=ids)
 

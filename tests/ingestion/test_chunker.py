@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from medasist.ingestion.chunker import TextChunk, chunk_document
+from medasist.ingestion.chunker import chunk_document
 from medasist.ingestion.schemas import DocType, LoadedDocument, PageContent
 
 
@@ -131,7 +129,9 @@ def test_chunk_ignores_short_chunks(settings):
 
 def test_chunk_bula_respects_sections(settings):
     # Texto com seções bem definidas — cada parágrafo > chunk_size para forçar split
-    section = "Zolatril 250mg é indicado para tratamento de infecções bacterianas. " * 15
+    section = (
+        "Zolatril 250mg é indicado para tratamento de infecções bacterianas. " * 15
+    )
     text = f"{section}\n\n{section}\n\n{section}"
     doc = _make_doc(DocType.BULA, text)
     chunks = chunk_document(doc, settings)

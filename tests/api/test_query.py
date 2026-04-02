@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
-from medasist.generation.chain import GenerationResult
-from medasist.generation.citations import CitationItem
 from medasist.profiles.schemas import UserProfile
 
 VALID_PAYLOAD = {"question": "qual a dose de amoxicilina?", "profile": "medico"}
@@ -61,7 +58,9 @@ class TestQueryColdStart:
         assert response.json()["is_cold_start"] is True
         assert response.json()["citations"] == []
 
-    def test_disclaimer_present_on_cold_start(self, cold_start_chain: MagicMock) -> None:
+    def test_disclaimer_present_on_cold_start(
+        self, cold_start_chain: MagicMock
+    ) -> None:
         chains = {profile: cold_start_chain for profile in UserProfile}
 
         with (
@@ -85,11 +84,15 @@ class TestQueryValidation:
         assert response.status_code == 422
 
     def test_question_too_long_returns_422(self, client: TestClient) -> None:
-        response = client.post("/query", json={"question": "x" * 501, "profile": "medico"})
+        response = client.post(
+            "/query", json={"question": "x" * 501, "profile": "medico"}
+        )
         assert response.status_code == 422
 
     def test_invalid_profile_returns_422(self, client: TestClient) -> None:
-        response = client.post("/query", json={"question": "qual a dose?", "profile": "invalido"})
+        response = client.post(
+            "/query", json={"question": "qual a dose?", "profile": "invalido"}
+        )
         assert response.status_code == 422
 
     def test_missing_profile_returns_422(self, client: TestClient) -> None:
@@ -98,5 +101,9 @@ class TestQueryValidation:
 
     def test_all_profiles_accepted(self, client: TestClient) -> None:
         for profile in ("medico", "enfermeiro", "assistente", "paciente"):
-            response = client.post("/query", json={"question": "qual a dose?", "profile": profile})
-            assert response.status_code == 200, f"perfil '{profile}' retornou {response.status_code}"
+            response = client.post(
+                "/query", json={"question": "qual a dose?", "profile": profile}
+            )
+            assert (
+                response.status_code == 200
+            ), f"perfil '{profile}' retornou {response.status_code}"

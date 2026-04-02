@@ -30,9 +30,9 @@ class TestUserProfile:
 class TestPromptTemplates:
     def test_all_profiles_have_prompt_template(self):
         for profile in UserProfile:
-            assert profile in PROMPT_TEMPLATES, (
-                f"Perfil '{profile.value}' sem template em PROMPT_TEMPLATES"
-            )
+            assert (
+                profile in PROMPT_TEMPLATES
+            ), f"Perfil '{profile.value}' sem template em PROMPT_TEMPLATES"
 
 
 class TestProfileConfigFrozen:

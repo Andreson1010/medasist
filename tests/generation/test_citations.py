@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 from langchain_core.documents import Document
 
-from medasist.generation.citations import CitationItem, build_citations, validate_citations
+from medasist.generation.citations import (
+    CitationItem,
+    build_citations,
+    validate_citations,
+)
 
 
 # ---------------------------------------------------------------------------

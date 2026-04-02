@@ -16,7 +16,11 @@ def _make_generation_result(
     is_cold_start: bool = False,
 ) -> GenerationResult:
     citations = (
-        [CitationItem(index=1, source="bula_amoxicilina.pdf", section="Posologia", page="3")]
+        [
+            CitationItem(
+                index=1, source="bula_amoxicilina.pdf", section="Posologia", page="3"
+            )
+        ]
         if not is_cold_start
         else []
     )
@@ -24,7 +28,10 @@ def _make_generation_result(
         answer=answer,
         citations=citations,
         profile=UserProfile.MEDICO,
-        disclaimer="Este sistema é um auxiliar informativo e não substitui avaliação médica presencial.",
+        disclaimer=(
+            "Este sistema é um auxiliar informativo e não substitui "
+            "avaliação médica presencial."
+        ),
         is_cold_start=is_cold_start,
     )
 
@@ -82,7 +89,9 @@ def admin_headers() -> dict[str, str]:
 
 
 @pytest.fixture()
-def ingest_client(client: TestClient) -> Generator[tuple[TestClient, dict[str, str]], None, None]:
+def ingest_client(
+    client: TestClient,
+) -> Generator[tuple[TestClient, dict[str, str]], None, None]:
     """TestClient + headers prontos para testes de ingestão.
 
     Já inclui patch de ``get_settings`` com ``admin_api_key`` correspondente

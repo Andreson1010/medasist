@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from medasist.ingestion.chunker import TextChunk
-from medasist.ingestion.metadata import ChunkMetadata, build_metadata, build_metadata_batch
+from medasist.ingestion.metadata import (
+    ChunkMetadata,
+    build_metadata,
+    build_metadata_batch,
+)
 from medasist.ingestion.schemas import DocType
 
 # ---------------------------------------------------------------------------

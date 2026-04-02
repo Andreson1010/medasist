@@ -7,14 +7,20 @@ import chromadb
 import pytest
 
 from medasist.config import Settings
-from medasist.ingestion.pipeline import IngestionResult, ingest_directory, ingest_document
+from medasist.ingestion.pipeline import (
+    IngestionResult,
+    ingest_directory,
+    ingest_document,
+)
 from medasist.ingestion.schemas import DocType, LoadedDocument, PageContent
 
 # ---------------------------------------------------------------------------
 # Helpers de teste
 # ---------------------------------------------------------------------------
 
-_LONG_TEXT = "Medicamento sintético Alphazol — indicado para dores agudas moderadas. " * 30
+_LONG_TEXT = (
+    "Medicamento sintético Alphazol — indicado para dores agudas moderadas. " * 30
+)
 
 
 def _fake_embed(texts: list[str]) -> list[list[float]]:
@@ -22,7 +28,9 @@ def _fake_embed(texts: list[str]) -> list[list[float]]:
     return [[0.1, 0.2, 0.3, 0.4] for _ in texts]
 
 
-def _make_doc(path: Path, doc_type: DocType, sha256: str, text: str = _LONG_TEXT) -> LoadedDocument:
+def _make_doc(
+    path: Path, doc_type: DocType, sha256: str, text: str = _LONG_TEXT
+) -> LoadedDocument:
     return LoadedDocument(
         path=path.resolve(),
         doc_type=doc_type,
@@ -69,7 +77,10 @@ def test_ingest_document_indexes_chunks(tmp_path, settings, chroma):
     pdf.write_bytes(b"%PDF-1.4")
     sha = "deadbeef" * 8  # 64 chars
 
-    with patch("medasist.ingestion.pipeline.load_pdf", return_value=_make_doc(pdf, DocType.BULA, sha)):
+    with patch(
+        "medasist.ingestion.pipeline.load_pdf",
+        return_value=_make_doc(pdf, DocType.BULA, sha),
+    ):
         result = ingest_document(pdf, DocType.BULA, chroma, settings, _fake_embed)
 
     assert isinstance(result, IngestionResult)
@@ -86,7 +97,10 @@ def test_ingest_document_skips_duplicate(tmp_path, settings, chroma):
     pdf.write_bytes(b"%PDF-1.4")
     sha = "cafebabe" * 8
 
-    with patch("medasist.ingestion.pipeline.load_pdf", return_value=_make_doc(pdf, DocType.BULA, sha)):
+    with patch(
+        "medasist.ingestion.pipeline.load_pdf",
+        return_value=_make_doc(pdf, DocType.BULA, sha),
+    ):
         first = ingest_document(pdf, DocType.BULA, chroma, settings, _fake_embed)
         second = ingest_document(pdf, DocType.BULA, chroma, settings, _fake_embed)
 
@@ -185,7 +199,9 @@ def test_ingest_directory_processes_all_pdfs(tmp_path, settings, chroma):
         return _make_doc(path, doc_type, sha)
 
     with patch("medasist.ingestion.pipeline.load_pdf", side_effect=_side_effect):
-        results = ingest_directory(tmp_path, DocType.BULA, chroma, settings, _fake_embed)
+        results = ingest_directory(
+            tmp_path, DocType.BULA, chroma, settings, _fake_embed
+        )
 
     assert len(results) == 2
     assert all(r.error is None for r in results)
@@ -195,7 +211,13 @@ def test_ingest_directory_processes_all_pdfs(tmp_path, settings, chroma):
 def test_ingest_directory_raises_for_missing_dir(settings, chroma):
     """Diretório inexistente lança NotADirectoryError."""
     with pytest.raises(NotADirectoryError):
-        ingest_directory(Path("/nonexistent/medasist_dir"), DocType.BULA, chroma, settings, _fake_embed)
+        ingest_directory(
+            Path("/nonexistent/medasist_dir"),
+            DocType.BULA,
+            chroma,
+            settings,
+            _fake_embed,
+        )
 
 
 def test_ingest_directory_returns_empty_for_no_pdfs(tmp_path, settings, chroma):
@@ -220,7 +242,9 @@ def test_ingest_directory_partial_errors_dont_abort(tmp_path, settings, chroma):
         return _make_doc(path, doc_type, sha_ok)
 
     with patch("medasist.ingestion.pipeline.load_pdf", side_effect=_side_effect):
-        results = ingest_directory(tmp_path, DocType.BULA, chroma, settings, _fake_embed)
+        results = ingest_directory(
+            tmp_path, DocType.BULA, chroma, settings, _fake_embed
+        )
 
     assert len(results) == 2
     ok = next(r for r in results if r.error is None)

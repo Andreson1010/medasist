@@ -179,7 +179,9 @@ class TestRunQueryNormal:
 
     def test_profile_preserved_in_result(self) -> None:
         docs = [_make_doc("texto")]
-        result = self._run_with_mock_llm(docs, "Resposta [1].", profile=UserProfile.ENFERMEIRO)
+        result = self._run_with_mock_llm(
+            docs, "Resposta [1].", profile=UserProfile.ENFERMEIRO
+        )
         assert result.profile == UserProfile.ENFERMEIRO
 
     def test_citations_extracted_from_docs(self) -> None:

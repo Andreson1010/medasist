@@ -116,8 +116,18 @@ class TestQuery:
         response = {
             **_FULL_RESPONSE,
             "citations": [
-                {"index": 1, "source": "doc_a.pdf", "section": "Introdução", "page": "1"},
-                {"index": 2, "source": "doc_b.pdf", "section": "Conclusão", "page": "10"},
+                {
+                    "index": 1,
+                    "source": "doc_a.pdf",
+                    "section": "Introdução",
+                    "page": "1",
+                },
+                {
+                    "index": 2,
+                    "source": "doc_b.pdf",
+                    "section": "Conclusão",
+                    "page": "10",
+                },
             ],
         }
         mock_cls, _ = _mock_client(200, response)
@@ -138,7 +148,6 @@ class TestQuery:
         mock_cls, mock_instance = _mock_client(200, _FULL_RESPONSE)
         with patch("medasist.ui.client.httpx.Client", mock_cls):
             query("Pergunta?", "medico", doc_types=["bula"], base_url=base_url)
-        call_kwargs = mock_instance.post.call_args
         body = mock_instance.post.call_args.kwargs["json"]
         assert body["doc_types"] == ["bula"]
 
