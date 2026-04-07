@@ -28,3 +28,4 @@ logs/
 todo/
 docs/adr/
 .req-hash
+docs/
