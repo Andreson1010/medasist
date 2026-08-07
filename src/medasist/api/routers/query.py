@@ -23,10 +23,13 @@ router = APIRouter()
         "e retorna a resposta com citações e disclaimer médico obrigatório."
     ),
 )
-async def query(
+def query(
     request: Request, body: Annotated[QueryRequest, Body()]
 ) -> QueryResponse:
     """Executa consulta RAG para o perfil e pergunta informados.
+
+    Endpoint síncrono de propósito: fastapi executa rotas ``def`` em uma
+    threadpool, evitando bloquear o event loop durante a chamada HTTP ao LLM.
 
     Parameters
     ----------

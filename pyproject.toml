@@ -15,10 +15,31 @@ where = ["src"]
 line-length = 88
 target-version = ["py311"]
 
-[tool.flake8]
-max-line-length = 88
-extend-ignore = ["E203", "W503"]
-per-file-ignores = ["__init__.py:F401"]
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [".venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (import ordering)
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E203", # whitespace before : (conflicts with black)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # re-exports in __init__.py
+
+[tool.ruff.lint.isort]
+known-first-party = ["medasist"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Python 3.11 | LangChain (LCEL) + OpenAI GPT-4o | ChromaDB local (persistente)
 - FastAPI + Uvicorn | Streamlit | Docker + Docker Compose
-- Qualidade: black (line-length 88), flake8 + flake8-bugbear, pytest
+- Qualidade: black (line-length 88), ruff (E/W/F/I/B/UP/C4/SIM), pytest
 
 ## Comandos Comuns
 
@@ -15,10 +15,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pip install -r requirements.txt -r requirements-dev.txt
 
 # Formatar código
-black src/ tests/
+black src/ tests/ scripts/
 
 # Lint
-flake8 src/ tests/
+ruff check src/ tests/ scripts/
+
+# Lint com auto-fix (imports, unused vars)
+ruff check --fix src/ tests/ scripts/
 
 # Rodar todos os testes
 pytest tests/ -v --cov=src --cov-fail-under=80

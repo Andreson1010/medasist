@@ -39,10 +39,11 @@ test:
 	pytest tests/ -v --cov=src --cov-fail-under=80
 
 lint:
-	flake8 src/ tests/ scripts/
+	ruff check src/ tests/ scripts/
 
 format:
 	black src/ tests/ scripts/
+	ruff check --fix src/ tests/ scripts/
 
 ## Verificação end-to-end
 check:
