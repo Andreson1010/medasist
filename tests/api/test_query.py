@@ -40,7 +40,7 @@ class TestQueryHappyPath:
 
 class TestQueryColdStart:
     def test_cold_start_flag_propagated(self, cold_start_chain: MagicMock) -> None:
-        chains = {profile: cold_start_chain for profile in UserProfile}
+        chains = dict.fromkeys(UserProfile, cold_start_chain)
 
         with (
             patch("medasist.api.main.get_all_vectorstores", return_value={}),
@@ -61,7 +61,7 @@ class TestQueryColdStart:
     def test_disclaimer_present_on_cold_start(
         self, cold_start_chain: MagicMock
     ) -> None:
-        chains = {profile: cold_start_chain for profile in UserProfile}
+        chains = dict.fromkeys(UserProfile, cold_start_chain)
 
         with (
             patch("medasist.api.main.get_all_vectorstores", return_value={}),

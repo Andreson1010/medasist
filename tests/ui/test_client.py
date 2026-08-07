@@ -174,27 +174,35 @@ class TestQuery:
 class TestQueryErrors:
     def test_raises_rate_limit_error_on_429(self, base_url: str) -> None:
         mock_cls, _ = _mock_client(429)
-        with patch("medasist.ui.client.httpx.Client", mock_cls):
-            with pytest.raises(RateLimitError):
-                query("Pergunta?", "medico", base_url=base_url)
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(RateLimitError),
+        ):
+            query("Pergunta?", "medico", base_url=base_url)
 
     def test_raises_server_error_on_500(self, base_url: str) -> None:
         mock_cls, _ = _mock_client(500)
-        with patch("medasist.ui.client.httpx.Client", mock_cls):
-            with pytest.raises(ServerError):
-                query("Pergunta?", "medico", base_url=base_url)
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(ServerError),
+        ):
+            query("Pergunta?", "medico", base_url=base_url)
 
     def test_raises_server_error_on_503(self, base_url: str) -> None:
         mock_cls, _ = _mock_client(503)
-        with patch("medasist.ui.client.httpx.Client", mock_cls):
-            with pytest.raises(ServerError):
-                query("Pergunta?", "medico", base_url=base_url)
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(ServerError),
+        ):
+            query("Pergunta?", "medico", base_url=base_url)
 
     def test_raises_api_error_on_400(self, base_url: str) -> None:
         mock_cls, _ = _mock_client(400)
-        with patch("medasist.ui.client.httpx.Client", mock_cls):
-            with pytest.raises(APIError):
-                query("Pergunta?", "medico", base_url=base_url)
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(APIError),
+        ):
+            query("Pergunta?", "medico", base_url=base_url)
 
     def test_raises_timeout_error_on_timeout(self, base_url: str) -> None:
         mock_cls = MagicMock()
@@ -202,6 +210,8 @@ class TestQueryErrors:
         mock_instance.post.side_effect = httpx.TimeoutException("timeout")
         mock_cls.return_value.__enter__.return_value = mock_instance
         mock_cls.return_value.__exit__.return_value = False
-        with patch("medasist.ui.client.httpx.Client", mock_cls):
-            with pytest.raises(RequestTimeoutError):
-                query("Pergunta?", "medico", base_url=base_url)
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(RequestTimeoutError),
+        ):
+            query("Pergunta?", "medico", base_url=base_url)

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 
-class DocType(str, Enum):
+class DocType(StrEnum):
     """Tipo de documento médico ingerido.
 
     O valor string corresponde ao sufixo usado em ``Settings``

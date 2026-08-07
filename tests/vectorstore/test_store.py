@@ -8,7 +8,6 @@ from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
 from medasist.vectorstore.store import get_all_vectorstores, get_vectorstore
 
-
 # ---------------------------------------------------------------------------
 # Helpers de teste
 # ---------------------------------------------------------------------------

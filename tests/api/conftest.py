@@ -58,7 +58,7 @@ def cold_start_chain() -> MagicMock:
 @pytest.fixture()
 def client(mock_chain: MagicMock) -> Generator[TestClient, None, None]:
     """TestClient com lifespan mockado (sem ChromaDB nem LLM real)."""
-    chains = {profile: mock_chain for profile in UserProfile}
+    chains = dict.fromkeys(UserProfile, mock_chain)
 
     with (
         patch("medasist.api.main.get_all_vectorstores") as mock_stores,
