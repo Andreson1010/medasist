@@ -4,11 +4,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
 from ingest_docs import main, parse_args
+
 from medasist.ingestion.pipeline import IngestionResult
 from medasist.ingestion.schemas import DocType
-
 
 # ---------------------------------------------------------------------------
 # parse_args

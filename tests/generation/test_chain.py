@@ -10,7 +10,6 @@ from medasist.generation.chain import GenerationResult, _format_context, run_que
 from medasist.generation.citations import CitationItem
 from medasist.profiles.schemas import UserProfile
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

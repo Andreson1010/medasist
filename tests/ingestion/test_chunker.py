@@ -5,7 +5,6 @@ from pathlib import Path
 from medasist.ingestion.chunker import chunk_document
 from medasist.ingestion.schemas import DocType, LoadedDocument, PageContent
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

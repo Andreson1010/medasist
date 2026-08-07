@@ -260,27 +260,26 @@ def main() -> None:
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            with st.chat_message("assistant"):
-                with st.spinner("Consultando..."):
-                    try:
-                        result = query(
-                            question=prompt,
-                            profile=profile_key,
-                            doc_types=doc_type_keys or None,
-                            base_url=settings.api_base_url,
-                            timeout=settings.ui_request_timeout,
-                        )
-                        _render_response(result, settings)
-                        st.session_state[_KEY_MESSAGES].append(
-                            {
-                                "role": "assistant",
-                                "content": result.answer,
-                                "result": result,
-                            }
-                        )
+            with st.chat_message("assistant"), st.spinner("Consultando..."):
+                try:
+                    result = query(
+                        question=prompt,
+                        profile=profile_key,
+                        doc_types=doc_type_keys or None,
+                        base_url=settings.api_base_url,
+                        timeout=settings.ui_request_timeout,
+                    )
+                    _render_response(result, settings)
+                    st.session_state[_KEY_MESSAGES].append(
+                        {
+                            "role": "assistant",
+                            "content": result.answer,
+                            "result": result,
+                        }
+                    )
 
-                    except APIError as exc:
-                        _handle_error(exc)
+                except APIError as exc:
+                    _handle_error(exc)
 
 
 if __name__ == "__main__":
