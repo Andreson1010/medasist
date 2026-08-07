@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import inspect
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from medasist.api.routers.query import query as query_handler
 from medasist.profiles.schemas import UserProfile
 
 VALID_PAYLOAD = {"question": "qual a dose de amoxicilina?", "profile": "medico"}
+
+
+class TestQueryIsSync:
+    def test_query_endpoint_is_sync(self) -> None:
+        """O endpoint /query deve ser síncrono (def), não async.
+
+        Endpoint async chamando a chain síncrona bloqueia o event loop durante
+        a geração do LLM. FastAPI roda rotas ``def`` numa threadpool.
+        """
+        assert not hasattr(query_handler, "__await__")
+        assert not inspect.iscoroutinefunction(query_handler)
 
 
 class TestQueryHappyPath:
