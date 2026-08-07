@@ -64,6 +64,29 @@ class TestIngestAuth:
 
 
 class TestIngestHappyPath:
+    def test_get_client_called_with_settings(
+        self,
+        ingest_client: tuple[TestClient, dict[str, str]],
+    ) -> None:
+        """get_client deve ser chamado com settings, não sem argumentos."""
+        client, headers = ingest_client
+        with (
+            patch(
+                "medasist.api.routers.ingest.ingest_document",
+                return_value=_IngestResult(),
+            ),
+            patch("medasist.api.routers.ingest.get_client") as mock_get_client,
+        ):
+            response = client.post(
+                "/ingest?doc_type=bula", files=_make_pdf_upload(), headers=headers
+            )
+        assert response.status_code == 200
+        mock_get_client.assert_called_once()
+        call_args = mock_get_client.call_args
+        assert call_args.args or call_args.kwargs, (
+            "get_client foi chamado sem argumentos — bug FIX-01"
+        )
+
     def test_returns_200(
         self,
         ingest_client: tuple[TestClient, dict[str, str]],

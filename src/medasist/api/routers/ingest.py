@@ -93,7 +93,7 @@ async def ingest(
         result = ingest_document(
             path=tmp_path,
             doc_type=doc_type,
-            chroma_client=get_client(),
+            chroma_client=get_client(settings),
             settings=settings,
         )
 
