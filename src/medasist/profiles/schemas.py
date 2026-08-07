@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from medasist.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
 
-class UserProfile(str, Enum):
+class UserProfile(StrEnum):
     """Papel do usuário no sistema MedAssist.
 
     O valor string corresponde ao prefixo usado em ``Settings``

@@ -3,12 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import ConfigDict
-
 from langchain_chroma import Chroma
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
+from pydantic import ConfigDict
 
 from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
