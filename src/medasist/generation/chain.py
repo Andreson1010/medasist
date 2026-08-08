@@ -16,6 +16,7 @@ from medasist.generation.citations import (
     validate_citations,
 )
 from medasist.generation.prompts import PromptRegistry
+from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile, get_profile_config
 from medasist.retrieval.retriever import build_retriever
 
@@ -71,6 +72,7 @@ def run_query(
     stores: dict[Any, Any],
     profile: UserProfile,
     settings: Settings | None = None,
+    doc_types: list[DocType] | None = None,
 ) -> GenerationResult:
     """Executa o pipeline RAG completo para uma pergunta.
 
@@ -92,6 +94,11 @@ def run_query(
         Perfil do usuário para selecionar temperatura, max_tokens e prompt.
     settings : Settings | None
         Configurações. Se ``None``, usa o singleton ``get_settings()``.
+    doc_types : list[DocType] | None
+        Filtro opcional de tipos de documento. Quando fornecido (lista não
+        vazia), a retrieção é limitada às coleções correspondentes — um novo
+        subconjunto é construído sem nunca mutar ``stores``. Se ``None`` ou
+        lista vazia, consulta todas as coleções.
 
     Returns
     -------
@@ -101,7 +108,11 @@ def run_query(
     if settings is None:
         settings = get_settings()
 
-    retriever = build_retriever(stores, settings)
+    if doc_types:
+        subset = {dt: stores[dt] for dt in doc_types if dt in stores}
+        retriever = build_retriever(subset, settings)
+    else:
+        retriever = build_retriever(stores, settings)
     docs: list[Document] = retriever.invoke(question)
 
     # --- Cold start guard (regra de segurança médica inegociável) ---
@@ -171,8 +182,8 @@ def build_chain(
     stores: dict[Any, Any],
     profile: UserProfile,
     settings: Settings | None = None,
-) -> Callable[[str], GenerationResult]:
-    """Retorna uma função ``run(question: str) -> GenerationResult``.
+) -> Callable[[str, list[DocType] | None], GenerationResult]:
+    """Retorna uma função ``run(question, doc_types=None) -> GenerationResult``.
 
     Conveniente para uso no FastAPI lifespan, onde as stores e o perfil
     são fixados no startup e a função resultante é chamada por request.
@@ -188,13 +199,14 @@ def build_chain(
 
     Returns
     -------
-    Callable[[str], GenerationResult]
-        Função que recebe uma pergunta e retorna ``GenerationResult``.
+    Callable[[str, list[DocType] | None], GenerationResult]
+        Função que recebe uma pergunta e filtros opcionais e retorna
+        ``GenerationResult``.
     """
     if settings is None:
         settings = get_settings()
 
-    def run(question: str) -> GenerationResult:
-        return run_query(question, stores, profile, settings)
+    def run(question: str, doc_types: list[DocType] | None = None) -> GenerationResult:
+        return run_query(question, stores, profile, settings, doc_types)
 
     return run

@@ -18,8 +18,9 @@ class QueryRequest(BaseModel):
     profile : UserProfile
         Perfil do usuário para selecionar temperatura, max_tokens e prompt.
     doc_types : list[DocType] | None
-        Filtro de tipos de documento. Reservado para uso futuro — aceito mas
-        não aplicado na versão atual.
+        Filtro de tipos de documento. Limita a recuperação às coleções
+        selecionadas. Quando ``None`` ou ``[]`` (lista vazia), consulta todas
+        as coleções.
     """
 
     question: str = Field(min_length=1, max_length=500)
@@ -27,8 +28,8 @@ class QueryRequest(BaseModel):
     doc_types: list[DocType] | None = Field(
         default=None,
         description=(
-            "Reservado — filtragem por tipo de documento "
-            "será suportada em versão futura."
+            "Filtro de tipos de documento. Limita a recuperação às coleções "
+            "selecionadas. Quando null ou lista vazia, consulta todas as coleções."
         ),
     )
 

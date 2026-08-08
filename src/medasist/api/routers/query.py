@@ -23,9 +23,7 @@ router = APIRouter()
         "e retorna a resposta com citações e disclaimer médico obrigatório."
     ),
 )
-def query(
-    request: Request, body: Annotated[QueryRequest, Body()]
-) -> QueryResponse:
+def query(request: Request, body: Annotated[QueryRequest, Body()]) -> QueryResponse:
     """Executa consulta RAG para o perfil e pergunta informados.
 
     Endpoint síncrono de propósito: fastapi executa rotas ``def`` em uma
@@ -44,7 +42,7 @@ def query(
         Resposta com answer, citations, disclaimer e flag de cold start.
     """
     chain = request.app.state.chains[body.profile]
-    result = chain(body.question)
+    result = chain(body.question, body.doc_types)
 
     logger.info(
         "query: profile='%s' cold_start=%s citations=%d",

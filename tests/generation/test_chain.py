@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage
 
 from medasist.generation.chain import GenerationResult, _format_context, run_query
 from medasist.generation.citations import CitationItem
+from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile
 
 # ---------------------------------------------------------------------------
@@ -132,6 +133,98 @@ class TestRunQueryColdStart:
             run_query("q?", stores, UserProfile.MEDICO, settings)
 
         mock_llm_cls.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# run_query — filtragem de doc_types
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_stores() -> dict[DocType, MagicMock]:
+    return {dt: MagicMock(name=f"store_{dt.value}") for dt in DocType}
+
+
+class TestRunQueryDocTypeFiltering:
+    def _call_with(
+        self,
+        stores: dict,
+        doc_types: list[DocType] | None,
+    ) -> MagicMock:
+        settings = _make_settings()
+
+        with patch("medasist.generation.chain.build_retriever") as mock_rb:
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = []
+            mock_rb.return_value = mock_retriever
+
+            run_query(
+                question="qual a dose?",
+                stores=stores,
+                profile=UserProfile.MEDICO,
+                settings=settings,
+                doc_types=doc_types,
+            )
+
+        return mock_rb
+
+    def test_doc_types_subset_passed_to_build_retriever(self) -> None:
+        stores = _make_mock_stores()
+        requested = [DocType.BULA, DocType.PROTOCOLO]
+
+        mock_rb = self._call_with(stores, requested)
+
+        delivered = mock_rb.call_args.args[0]
+        assert set(delivered.keys()) == set(requested)
+
+    def test_missing_doc_type_key_ignored(self) -> None:
+        stores = _make_mock_stores()
+        requested = [DocType.BULA, "NAO_EXISTE"]
+
+        mock_rb = self._call_with(stores, requested)  # type: ignore[list-item]
+
+        delivered = mock_rb.call_args.args[0]
+        assert set(delivered.keys()) == {DocType.BULA}
+
+    def test_none_passes_full_stores(self) -> None:
+        stores = _make_mock_stores()
+
+        mock_rb = self._call_with(stores, None)
+
+        assert mock_rb.call_args.args[0] is stores
+        assert set(mock_rb.call_args.args[0].keys()) == set(stores.keys())
+
+    def test_empty_list_passes_full_stores(self) -> None:
+        stores = _make_mock_stores()
+
+        mock_rb = self._call_with(stores, [])
+
+        assert mock_rb.call_args.args[0] is stores
+
+    def test_omitted_parameter_passes_full_stores(self) -> None:
+        stores = _make_mock_stores()
+        settings = _make_settings()
+
+        with patch("medasist.generation.chain.build_retriever") as mock_rb:
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = []
+            mock_rb.return_value = mock_retriever
+
+            run_query(
+                question="qual a dose?",
+                stores=stores,
+                profile=UserProfile.MEDICO,
+                settings=settings,
+            )
+
+        assert mock_rb.call_args.args[0] is stores
+
+    def test_original_stores_never_mutated(self) -> None:
+        stores = _make_mock_stores()
+        original_keys = set(stores.keys())
+
+        self._call_with(stores, [DocType.BULA])
+
+        assert set(stores.keys()) == original_keys
 
 
 # ---------------------------------------------------------------------------

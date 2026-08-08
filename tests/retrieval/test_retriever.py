@@ -158,6 +158,24 @@ def test_retrieve_multi_doctype_searches_all_collections(stores_with_docs, setti
     assert doc_types_found == {"bula", "diretriz"}
 
 
+def test_retrieve_subset_only_returns_subset_doctypes(stores_with_docs, settings):
+    """Retrieval com stores subset recupera apenas dos DocTypes do subset."""
+    from medasist.retrieval.retriever import retrieve
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    subset = {DocType.BULA: stores_with_docs[DocType.BULA]}
+    docs = retrieve("hipertensão tratamento", subset, settings_loose)
+
+    assert isinstance(docs, list)
+    assert len(docs) > 0
+    doc_types_found = {d.metadata.get("doc_type") for d in docs if d.metadata}
+    assert doc_types_found == {"bula"}
+
+
 def test_retrieve_respects_top_k(client, embeddings, settings):
     """retrieve retorna no máximo retrieval_top_k documentos."""
     from medasist.retrieval.retriever import retrieve
