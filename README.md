@@ -28,13 +28,12 @@ UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + LM St
 | LLM / Embeddings | LM Studio (Phi-3-mini / nomic-embed-text) via LangChain |
 | Orquestração | LangChain LCEL |
 | Vector Store | ChromaDB (persistente local) |
-| PDF | pdfplumber + PyMuPDF (fallback OCR) |
+| PDF | pdfplumber + PyMuPDF (fallback) |
 | API | FastAPI + Uvicorn + slowapi (rate limiting) |
 | UI | Streamlit + httpx |
 | Config | pydantic-settings |
 | Testes | pytest + pytest-cov + pytest-mock |
-| Qualidade | black (line-length 88) + flake8 + flake8-bugbear |
-| Avaliação RAG | RAGAS + datasets |
+| Qualidade | black (line-length 88) + ruff |
 
 ---
 
@@ -102,7 +101,7 @@ Toda configuração é gerenciada por `src/medasist/config.py` (pydantic-setting
 black src/ tests/
 
 # Lint
-flake8 src/ tests/
+ruff check src/ tests/
 
 # Rodar todos os testes com cobertura
 pytest tests/ -v --cov=src --cov-fail-under=80
@@ -115,9 +114,6 @@ pytest tests/ingestion/test_chunker.py::test_chunk_bula_respects_sections -v
 
 # Ingerir documentos (coloque PDFs em data/raw/)
 python scripts/ingest_docs.py --dir data/raw/
-
-# Avaliar qualidade do RAG
-python scripts/evaluate_rag.py
 
 # Subir API + UI
 uvicorn src.medasist.api.main:app --reload  # API
@@ -160,8 +156,8 @@ Cada tipo usa uma estratégia de chunking própria (separadores e tamanhos confi
 ```json
 {
   "question": "Qual a dose máxima de dipirona para adultos?",
-  "profile": "MEDICO",
-  "doc_types": ["BULA"]
+  "profile": "medico",
+  "doc_types": ["bula"]
 }
 ```
 
@@ -171,9 +167,9 @@ Resposta:
 {
   "answer": "...[1]",
   "citations": [
-    { "index": 1, "document": "bula_dipirona.pdf", "section": "Posologia", "page": 3 }
+    { "index": 1, "source": "bula_dipirona.pdf", "section": "Posologia", "page": 3 }
   ],
-  "profile": "MEDICO",
+  "profile": "medico",
   "disclaimer": "Este sistema é um auxiliar informativo e não substitui avaliação médica presencial"
 }
 ```
@@ -199,7 +195,7 @@ Ingestão é **idempotente**: documentos já processados (mesmo SHA-256) são ig
 ### Pipeline de Recuperação e Geração
 
 ```
-QueryRequest → retriever.py (MMR + score threshold)
+QueryRequest → retriever.py (distância L2 + score threshold)
              → [cold start se score < threshold]
              → chain.py (LangChain LCEL: retriever | prompt | LLM | parser)
              → citations.py (valida referências [N])
@@ -245,7 +241,7 @@ medasist/
 │   ├── api/                # FastAPI routers
 │   └── ui/                 # Streamlit app
 ├── tests/                  # Espelho de src/
-├── scripts/                # ingest_docs.py, evaluate_rag.py
+├── scripts/                # ingest_docs.py
 ├── data/
 │   ├── raw/                # PDFs de entrada (não versionado)
 │   └── processed/          # Artefatos processados
@@ -262,7 +258,7 @@ medasist/
 
 - Branches: `feat/`, `fix/`, `refactor/`, `data/`
 - Commits em português, imperativo: `feat: adiciona endpoint de consulta RAG`
-- Antes de abrir PR: executar code review com o agente `code-reviewer`
+- Antes de abrir PR: executar code review com o skill `code-reviewer`
 
 ---
 
