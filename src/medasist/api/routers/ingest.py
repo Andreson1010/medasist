@@ -84,9 +84,15 @@ def verify_admin_key(x_admin_key: Annotated[str, Header()]) -> None:
     HTTPException
         401 se a chave for inválida.
     """
+    stripped = x_admin_key.strip()
+    if not stripped:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de admin inválida."
+        )
+
     settings = get_settings()
     expected = settings.admin_api_key.get_secret_value()
-    if not secrets.compare_digest(x_admin_key, expected):
+    if not secrets.compare_digest(stripped, expected):
         logger.warning("ingest: tentativa com chave de admin inválida.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de admin inválida."

@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from medasist.api.deps import limiter
 from medasist.api.routers.ingest import router as ingest_router
 from medasist.api.routers.query import router as query_router
-from medasist.config import get_settings
+from medasist.config import ADMIN_KEY_MIN_LENGTH, admin_key_is_weak, get_settings
 from medasist.generation.chain import build_chain
 from medasist.profiles.schemas import UserProfile
 from medasist.vectorstore.store import (
@@ -37,6 +37,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         Instância da aplicação.
     """
     settings = get_settings()
+    if admin_key_is_weak(settings.admin_api_key.get_secret_value()):
+        logger.warning(
+            "ADMIN_API_KEY está usando um valor padrão/placeholder; configure "
+            "uma chave forte de pelo menos %d caracteres para o endpoint /ingest.",
+            ADMIN_KEY_MIN_LENGTH,
+        )
     client = get_client(settings)
     embeddings = build_embeddings(settings)
     stores = get_all_vectorstores(client, embeddings, settings)

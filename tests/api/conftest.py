@@ -73,7 +73,7 @@ def client(mock_chain: MagicMock) -> Generator[TestClient, None, None]:
             yield c
 
 
-_TEST_ADMIN_KEY = "test-admin-key"
+_TEST_ADMIN_KEY = "test-admin-key-0123456789"
 
 
 @pytest.fixture()
