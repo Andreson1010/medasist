@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack
 
-- Python 3.11 | LangChain (LCEL) + OpenAI GPT-4o | ChromaDB local (persistente)
+- Python 3.11 | LangChain (LCEL) + LM Studio | ChromaDB local (persistente)
 - FastAPI + Uvicorn | Streamlit | Docker + Docker Compose
 - Qualidade: black (line-length 88), ruff (E/W/F/I/B/UP/C4/SIM), pytest
 
@@ -35,11 +35,8 @@ pytest tests/ingestion/test_chunker.py::test_chunk_bula_respects_sections -v
 # Ingestão de documentos
 python scripts/ingest_docs.py --dir data/raw/
 
-# Avaliação do RAG
-python scripts/evaluate_rag.py
-
 # Subir ambiente local (API + UI)
-cp .env.example .env  # preencher OPENAI_API_KEY
+cp .env.example .env  # preencher LM_STUDIO_BASE_URL/modelos no .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # API docs: http://localhost:8000/docs
@@ -51,26 +48,26 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 O sistema é um pipeline RAG em camadas:
 
 ```
-UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + OpenAI
+UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + LM Studio
                                       ↑
                               Pipeline de Ingestão
 ```
 
-**`src/medasist/config.py`** — fonte única de configuração via `pydantic-settings`. Todo módulo importa daqui: caminhos, nomes de coleção, tamanhos de chunk, modelos OpenAI, thresholds.
+**`src/medasist/config.py`** — fonte única de configuração via `pydantic-settings`. Todo módulo importa daqui: caminhos, nomes de coleção, tamanhos de chunk, modelos LM Studio, thresholds.
 
-**`src/medasist/ingestion/`** — pipeline de ingestão: `loader.py` extrai texto de PDFs (pdfplumber + fallback PyMuPDF/OCR), `chunker.py` aplica estratégia diferente por `DocType`, `metadata.py` anexa metadados por chunk, `pipeline.py` orquestra tudo de forma idempotente (hash evita re-ingestão).
+**`src/medasist/ingestion/`** — pipeline de ingestão: `loader.py` extrai texto de PDFs (pdfplumber + fallback PyMuPDF), `chunker.py` aplica estratégia diferente por `DocType`, `metadata.py` anexa metadados por chunk, `pipeline.py` orquestra tudo de forma idempotente (hash evita re-ingestão).
 
 **`src/medasist/vectorstore/`** — uma coleção ChromaDB por `DocType` (`bulas`, `diretrizes`, `protocolos`, `manuais`). Isso evita contaminação pós-ANN: filtragem por tipo ocorre na seleção da coleção, não via `where` depois do ANN.
 
-**`src/medasist/retrieval/`** — `retriever.py` configura `VectorStoreRetriever` com MMR e score threshold. Se nenhum chunk supera o threshold, a chain curto-circuita antes de chamar o LLM (cold start — zero custo, zero alucinação).
+**`src/medasist/retrieval/`** — `retriever.py` filtra por distância L2 (similarity_search_with_score) com score threshold. Se nenhum chunk supera o threshold, a chain curto-circuita antes de chamar o LLM (cold start — zero custo, zero alucinação).
 
-**`src/medasist/generation/`** — `chain.py` monta a chain LCEL `retriever | prompt | ChatOpenAI | parser`. `prompts.py` contém um `PromptRegistry` com template por `UserProfile`. `citations.py` valida que todo `[N]` no texto tem `CitationItem` correspondente; referências órfãs são removidas.
+**`src/medasist/generation/`** — `chain.py` monta a chain LCEL `retriever | prompt | ChatOpenAI (LM Studio) | parser`. `prompts.py` contém um `PromptRegistry` com template por `UserProfile`. `citations.py` valida que todo `[N]` no texto tem `CitationItem` correspondente; referências órfãs são removidas.
 
-**`src/medasist/profiles/schemas.py`** — enum `UserProfile` (`MEDICO`, `ENFERMEIRO`, `ASSISTENTE`, `PACIENTE`) e `ProfileConfig` com `temperature`, `max_tokens`, `prompt_template`. Temperaturas: médico → 0.1, assistente → 0.2, paciente → 0.3.
+**`src/medasist/profiles/schemas.py`** — enum `UserProfile` (`MEDICO`, `ENFERMEIRO`, `ASSISTENTE`, `PACIENTE`) e `ProfileConfig` com `temperature`, `max_tokens`, `prompt_template`. Temperaturas: médico → 0.1, enfermeiro → 0.15, assistente → 0.2, paciente → 0.3.
 
 **`src/medasist/api/`** — FastAPI com lifespan que aquece todas as chains no startup. `POST /query` recebe `QueryRequest(question, profile, doc_types?)` e retorna `QueryResponse(answer, citations, profile, disclaimer)`. `POST /ingest` requer header `X-Admin-Key`. Rate limiting via `slowapi`.
 
-**`src/medasist/ui/app.py`** — Streamlit que chama `POST /query` via httpx. Nunca acessa OpenAI diretamente.
+**`src/medasist/ui/app.py`** — Streamlit que chama `POST /query` via httpx. Nunca acessa o provider de LLM diretamente (apenas via API).
 
 ## Convenções Python Obrigatórias
 
@@ -97,7 +94,7 @@ from __future__ import annotations
 - Espelham `src/` em `tests/` (ex: `src/medasist/ingestion/chunker.py` → `tests/ingestion/test_chunker.py`)
 - Fixtures usam dados sintéticos (nomes de medicamentos e protocolos fictícios)
 - Testes de vectorstore usam `chromadb.EphemeralClient`
-- Mocks de OpenAI em testes unitários via `pytest-mock`
+- Mocks de LLM/embeddings em testes unitários via `pytest-mock`
 
 ## Git
 
