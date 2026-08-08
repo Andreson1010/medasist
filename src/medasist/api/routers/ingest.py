@@ -28,6 +28,46 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+STREAM_CHUNK_SIZE: int = 1024 * 1024
+
+
+async def _stream_upload_with_limit(
+    file: UploadFile, path: Path, max_bytes: int
+) -> None:
+    """Escreve o upload em chunks, abortando com 413 quando excede o limite.
+
+    Parameters
+    ----------
+    file : UploadFile
+        Arquivo enviado pelo cliente.
+    path : Path
+        Caminho do arquivo temporário de destino.
+    max_bytes : int
+        Tamanho máximo aceito em bytes (inclusivo).
+
+    Raises
+    ------
+    HTTPException
+        413 se o total de bytes lidos ultrapassar ``max_bytes``.
+    """
+    total = 0
+    with path.open("wb") as tmp:
+        while chunk := await file.read(STREAM_CHUNK_SIZE):
+            total += len(chunk)
+            if total > max_bytes:
+                logger.warning(
+                    "ingest: upload excede o limite de %s MB.",
+                    max_bytes // (1024 * 1024),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=(
+                        f"Arquivo excede o limite máximo de "
+                        f"{max_bytes // (1024 * 1024)} MB."
+                    ),
+                )
+            tmp.write(chunk)
+
 
 def verify_admin_key(x_admin_key: Annotated[str, Header()]) -> None:
     """Valida o header X-Admin-Key contra a chave configurada.
@@ -83,12 +123,12 @@ async def ingest(
         Resultado da ingestão com sha256, chunks_indexed e flag skipped.
     """
     settings = get_settings()
+    max_bytes = settings.max_upload_mb * 1024 * 1024
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp_path = Path(tmp.name)
 
     try:
-        content = await file.read()
-        tmp_path.write_bytes(content)
+        await _stream_upload_with_limit(file, tmp_path, max_bytes)
 
         result = ingest_document(
             path=tmp_path,

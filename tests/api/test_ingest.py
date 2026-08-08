@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from medasist.config import Settings
 
 
 @dataclass
@@ -83,9 +86,9 @@ class TestIngestHappyPath:
         assert response.status_code == 200
         mock_get_client.assert_called_once()
         call_args = mock_get_client.call_args
-        assert call_args.args or call_args.kwargs, (
-            "get_client foi chamado sem argumentos — bug FIX-01"
-        )
+        assert (
+            call_args.args or call_args.kwargs
+        ), "get_client foi chamado sem argumentos — bug FIX-01"
 
     def test_returns_200(
         self,
@@ -194,3 +197,118 @@ class TestIngestError:
             )
         assert response.status_code == 500
         assert response.json()["detail"] == "Falha ao processar o documento."
+
+
+class TestUploadLimit:
+    """Testa o limite de upload (streaming early-abort) no POST /ingest.
+
+    Define ``max_upload_mb=1`` via um Settings real para testar com
+    payloads pequenos (1 MB = 1048576 bytes).
+    """
+
+    ADMIN_KEY = "test-admin-key"
+    MB = 1024 * 1024
+
+    def _patch_settings(self, mb: int = 1) -> patch:
+        settings = Settings(
+            max_upload_mb=mb,
+            admin_api_key=SecretStr(self.ADMIN_KEY),
+        )
+        return patch("medasist.api.routers.ingest.get_settings", return_value=settings)
+
+    @staticmethod
+    def _upload(size: int) -> dict:
+        return {"file": ("bula_teste.pdf", io.BytesIO(b"x" * size), "application/pdf")}
+
+    def test_oversized_returns_413_and_skips_ingest_document(
+        self, client: TestClient
+    ) -> None:
+        with (
+            self._patch_settings(mb=1),
+            patch("medasist.api.routers.ingest.ingest_document") as mock_ingest,
+            patch("medasist.api.routers.ingest.get_client"),
+        ):
+            response = client.post(
+                "/ingest?doc_type=bula",
+                files=self._upload(self.MB + 1),
+                headers={"X-Admin-Key": self.ADMIN_KEY},
+            )
+        assert response.status_code == 413
+        assert "Arquivo excede o limite máximo de 1 MB." in response.json()["detail"]
+        mock_ingest.assert_not_called()
+
+    def test_exactly_at_limit_is_accepted(self, client: TestClient) -> None:
+        with (
+            self._patch_settings(mb=1),
+            patch(
+                "medasist.api.routers.ingest.ingest_document",
+                return_value=_IngestResult(),
+            ),
+            patch("medasist.api.routers.ingest.get_client"),
+        ):
+            response = client.post(
+                "/ingest?doc_type=bula",
+                files=self._upload(self.MB),
+                headers={"X-Admin-Key": self.ADMIN_KEY},
+            )
+        assert response.status_code == 200
+
+    def test_within_limit_returns_200_and_writes_full_file(
+        self, client: TestClient
+    ) -> None:
+        written: list[bytes] = []
+
+        def _capture(path, **kwargs):
+            written.append(path.read_bytes())
+            return _IngestResult()
+
+        with (
+            self._patch_settings(mb=1),
+            patch(
+                "medasist.api.routers.ingest.ingest_document",
+                side_effect=_capture,
+            ),
+            patch("medasist.api.routers.ingest.get_client"),
+        ):
+            response = client.post(
+                "/ingest?doc_type=bula",
+                files=self._upload(1000),
+                headers={"X-Admin-Key": self.ADMIN_KEY},
+            )
+        assert response.status_code == 200
+        assert len(written) == 1
+        assert len(written[0]) == 1000
+
+    def test_auth_precedes_size_check(self, client: TestClient) -> None:
+        settings = Settings(
+            max_upload_mb=1,
+            admin_api_key=SecretStr("correct-key"),
+        )
+        with (
+            patch("medasist.api.routers.ingest.get_settings", return_value=settings),
+            patch("medasist.api.routers.ingest.ingest_document") as mock_ingest,
+            patch("medasist.api.routers.ingest.get_client"),
+        ):
+            response = client.post(
+                "/ingest?doc_type=bula",
+                files=self._upload(self.MB + 1),
+                headers={"X-Admin-Key": "wrong-key"},
+            )
+        assert response.status_code == 401
+        mock_ingest.assert_not_called()
+
+    def test_empty_file_within_limit_is_processed(self, client: TestClient) -> None:
+        with (
+            self._patch_settings(mb=1),
+            patch(
+                "medasist.api.routers.ingest.ingest_document",
+                return_value=_IngestResult(),
+            ),
+            patch("medasist.api.routers.ingest.get_client"),
+        ):
+            response = client.post(
+                "/ingest?doc_type=bula",
+                files=self._upload(0),
+                headers={"X-Admin-Key": self.ADMIN_KEY},
+            )
+        assert response.status_code == 200

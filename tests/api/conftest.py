@@ -99,6 +99,7 @@ def ingest_client(
     """
     mock_settings = MagicMock()
     mock_settings.admin_api_key.get_secret_value.return_value = _TEST_ADMIN_KEY
+    mock_settings.max_upload_mb = 25
 
     with patch("medasist.api.routers.ingest.get_settings", return_value=mock_settings):
         yield client, {"X-Admin-Key": _TEST_ADMIN_KEY}

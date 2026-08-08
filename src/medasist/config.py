@@ -36,6 +36,8 @@ class Settings(BaseSettings):
         Porta do servidor FastAPI.
     admin_api_key : SecretStr
         Chave de autenticação do endpoint /ingest.
+    max_upload_mb : int
+        Limite de tamanho de upload em MB para o endpoint /ingest (padrão: 25).
     api_base_url : str
         URL base da API consumida pelo Streamlit.
     log_level : str
@@ -86,6 +88,7 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000)
     admin_api_key: SecretStr = Field(default=SecretStr("dev-only"))
+    max_upload_mb: int = Field(default=25, gt=0)
 
     # UI
     api_base_url: str = Field(default="http://localhost:8000")

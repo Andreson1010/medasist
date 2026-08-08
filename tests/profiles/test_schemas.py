@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 
 import pytest
+from pydantic import ValidationError
 
 from medasist.config import Settings
 from medasist.profiles.schemas import (
@@ -101,3 +102,17 @@ class TestGetProfileConfig:
         for profile in UserProfile:
             config = get_profile_config(profile, settings=default_settings)
             assert isinstance(config, ProfileConfig)
+
+
+class TestMaxUploadMb:
+    def test_default_is_25(self):
+        settings = Settings()  # type: ignore[call-arg]
+        assert settings.max_upload_mb == 25
+
+    def test_accepts_positive_value(self):
+        settings = Settings(max_upload_mb=10)  # type: ignore[call-arg]
+        assert settings.max_upload_mb == 10
+
+    def test_rejects_non_positive(self):
+        with pytest.raises(ValidationError):
+            Settings(max_upload_mb=0)  # type: ignore[call-arg]
