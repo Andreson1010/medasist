@@ -83,6 +83,7 @@ from __future__ import annotations
 - Logging: `logger = logging.getLogger(__name__)`, nunca `print()`
 - Docstrings: estilo NumPy em todas as funções e classes públicas
 - Secrets: apenas em `.env`; referência em `.env.example`
+- Limites de código: funções com até 50 linhas, aninhamento até 4 níveis e arquivos com até 800 linhas; acima disso, extrair/módularizar.
 
 ## Regras de Segurança Inegociáveis
 
@@ -106,4 +107,4 @@ from __future__ import annotations
 
 ## Fluxo de Code Review
 
-  Antes de abrir qualquer PR, executar code review com o agent **code-reviewer**
+  Antes de abrir qualquer PR, executar code review com o skill **code-reviewer**.
