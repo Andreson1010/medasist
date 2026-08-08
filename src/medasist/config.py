@@ -3,10 +3,33 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+ADMIN_KEY_MIN_LENGTH: int = 16
+_INSECURE_ADMIN_KEYS: tuple[str, ...] = ("dev-only", "troque-por-chave-segura")
+
+
+def admin_key_is_weak(value: str) -> bool:
+    """Verifica se uma chave de admin é fraca.
+
+    Uma chave é considerada fraca quando é um placeholder conhecido ou tem
+    menos que ``ADMIN_KEY_MIN_LENGTH`` caracteres (após remover espaços).
+
+    Parameters
+    ----------
+    value : str
+        Valor da chave (plaintext) a ser verificado.
+
+    Returns
+    -------
+    bool
+        ``True`` se a chave é fraca, ``False`` caso contrário.
+    """
+    stripped = value.strip()
+    return (stripped in _INSECURE_ADMIN_KEYS) or (len(stripped) < ADMIN_KEY_MIN_LENGTH)
 
 
 class Settings(BaseSettings):
@@ -89,6 +112,34 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000)
     admin_api_key: SecretStr = Field(default=SecretStr("dev-only"))
     max_upload_mb: int = Field(default=25, gt=0)
+
+    @field_validator("admin_api_key")
+    @classmethod
+    def _validate_admin_api_key(cls, v: SecretStr) -> SecretStr:
+        """Rejeita chaves fracas/placeholder ou com menos de 16 caracteres.
+
+        Parameters
+        ----------
+        v : SecretStr
+            Valor da chave de admin.
+
+        Returns
+        -------
+        SecretStr
+            A chave validada.
+
+        Raises
+        ------
+        ValueError
+            Se a chave for fraca (placeholder ou < ``ADMIN_KEY_MIN_LENGTH``).
+        """
+        if admin_key_is_weak(v.get_secret_value()):
+            raise ValueError(
+                "admin_api_key precisa ter pelo menos "
+                f"{ADMIN_KEY_MIN_LENGTH} caracteres e não usar valor "
+                "padrão/placeholder."
+            )
+        return v
 
     # UI
     api_base_url: str = Field(default="http://localhost:8000")

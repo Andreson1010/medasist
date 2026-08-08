@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from medasist.config import Settings
 
 MB = 1024 * 1024
-ADMIN_KEY = "test-admin-key"
+ADMIN_KEY = "test-admin-key-0123456789"
 
 # Testes de aceitação do FIX-05 — limite de upload no ``POST /ingest``.
 #

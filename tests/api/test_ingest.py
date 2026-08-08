@@ -31,9 +31,27 @@ class TestIngestAuth:
         )
         assert response.status_code == 422
 
+    def test_empty_admin_key_returns_401(self, client: TestClient) -> None:
+        response = client.post(
+            "/ingest?doc_type=bula",
+            files=_make_pdf_upload(),
+            headers={"X-Admin-Key": ""},
+        )
+        assert response.status_code == 401
+
+    def test_whitespace_admin_key_returns_401(self, client: TestClient) -> None:
+        response = client.post(
+            "/ingest?doc_type=bula",
+            files=_make_pdf_upload(),
+            headers={"X-Admin-Key": "   "},
+        )
+        assert response.status_code == 401
+
     def test_wrong_admin_key_returns_401(self, client: TestClient) -> None:
         mock_settings = MagicMock()
-        mock_settings.admin_api_key.get_secret_value.return_value = "correct-key"
+        mock_settings.admin_api_key.get_secret_value.return_value = (
+            "correct-key-0123456789"
+        )
 
         with patch(
             "medasist.api.routers.ingest.get_settings", return_value=mock_settings
@@ -41,7 +59,7 @@ class TestIngestAuth:
             response = client.post(
                 "/ingest?doc_type=bula",
                 files=_make_pdf_upload(),
-                headers={"X-Admin-Key": "wrong-key"},
+                headers={"X-Admin-Key": "wrong-key-9876543210"},
             )
 
         assert response.status_code == 401
@@ -206,7 +224,7 @@ class TestUploadLimit:
     payloads pequenos (1 MB = 1048576 bytes).
     """
 
-    ADMIN_KEY = "test-admin-key"
+    ADMIN_KEY = "test-admin-key-0123456789"
     MB = 1024 * 1024
 
     def _patch_settings(self, mb: int = 1) -> patch:
@@ -282,7 +300,7 @@ class TestUploadLimit:
     def test_auth_precedes_size_check(self, client: TestClient) -> None:
         settings = Settings(
             max_upload_mb=1,
-            admin_api_key=SecretStr("correct-key"),
+            admin_api_key=SecretStr(self.ADMIN_KEY),
         )
         with (
             patch("medasist.api.routers.ingest.get_settings", return_value=settings),
