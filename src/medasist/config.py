@@ -32,6 +32,27 @@ def admin_key_is_weak(value: str) -> bool:
     return (stripped in _INSECURE_ADMIN_KEYS) or (len(stripped) < ADMIN_KEY_MIN_LENGTH)
 
 
+def csv_list(value: str) -> list[str]:
+    """Converte uma string CSV (vírgula) em lista de itens.
+
+    Itens vazios são descartados e o placeholder ``"*"`` é preservado
+    como item único. Uma string vazia ou só de vírgulas retorna ``["*"]``
+    (comportamento permissivo para o middleware CORS).
+
+    Parameters
+    ----------
+    value : str
+        String com itens separados por vírgula (ex: ``"a, b, c"``).
+
+    Returns
+    -------
+    list[str]
+        Lista de itens sem espaços. ``["*"]`` se não houver itens.
+    """
+    items = [item.strip() for item in value.split(",") if item.strip()]
+    return items or ["*"]
+
+
 class Settings(BaseSettings):
     """Configurações centrais do MedAssist, carregadas do .env.
 
@@ -61,6 +82,14 @@ class Settings(BaseSettings):
         Chave de autenticação do endpoint /ingest.
     max_upload_mb : int
         Limite de tamanho de upload em MB para o endpoint /ingest (padrão: 25).
+    cors_allow_origins : str
+        Origens permitidas no CORS, separadas por vírgula (padrão: ``"*"``).
+    cors_allow_methods : str
+        Métodos HTTP permitidos no CORS, separados por vírgula (padrão: ``"*"``).
+    cors_allow_headers : str
+        Headers permitidos no CORS, separados por vírgula (padrão: ``"*"``).
+    cors_allow_credentials : bool
+        Permite credenciais nas requisições CORS (padrão: ``False``).
     api_base_url : str
         URL base da API consumida pelo Streamlit.
     log_level : str
@@ -112,6 +141,12 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000)
     admin_api_key: SecretStr = Field(default=SecretStr("dev-only"))
     max_upload_mb: int = Field(default=25, gt=0)
+
+    # CORS
+    cors_allow_origins: str = Field(default="*")
+    cors_allow_methods: str = Field(default="*")
+    cors_allow_headers: str = Field(default="*")
+    cors_allow_credentials: bool = Field(default=False)
 
     @field_validator("admin_api_key")
     @classmethod

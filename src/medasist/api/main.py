@@ -5,13 +5,19 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from medasist.api.deps import limiter
 from medasist.api.routers.ingest import router as ingest_router
 from medasist.api.routers.query import router as query_router
-from medasist.config import ADMIN_KEY_MIN_LENGTH, admin_key_is_weak, get_settings
+from medasist.config import (
+    ADMIN_KEY_MIN_LENGTH,
+    admin_key_is_weak,
+    csv_list,
+    get_settings,
+)
 from medasist.generation.chain import build_chain
 from medasist.profiles.schemas import UserProfile
 from medasist.vectorstore.store import (
@@ -68,6 +74,15 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+_cors_settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=csv_list(_cors_settings.cors_allow_origins),
+    allow_methods=csv_list(_cors_settings.cors_allow_methods),
+    allow_headers=csv_list(_cors_settings.cors_allow_headers),
+    allow_credentials=_cors_settings.cors_allow_credentials,
+)
 
 app.include_router(query_router)
 app.include_router(ingest_router)
