@@ -18,7 +18,7 @@ from medasist.evaluation.dataset import GoldenQuestion
 from medasist.generation.chain import run_query
 from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile
-from medasist.retrieval.retriever import retrieve
+from medasist.retrieval.retriever import retrieve, select_collections
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,9 @@ class EvaluationReport:
         Perguntas que resultaram em cold start no pipeline.
     num_generation_evaluated : int
         Perguntas não-cold-start (avaliadas em Faithfulness/AnswerRelevancy).
+    num_retrieval_evaluated : int
+        Perguntas não-cold-start (avaliadas em ContextPrecision/ContextRecall);
+        igual a ``num_generation_evaluated``.
     """
 
     aggregates: dict[str, float | None]
@@ -74,6 +77,7 @@ class EvaluationReport:
     num_questions: int
     num_cold_start: int
     num_generation_evaluated: int
+    num_retrieval_evaluated: int
 
 
 def build_eval_llm(settings: Settings) -> LangchainLLMWrapper:
@@ -207,34 +211,6 @@ def _aggregate(result: Any, metric: str) -> float | None:
     return fmean(valid)
 
 
-def _build_subset(
-    stores: dict[DocType, Any],
-    doc_types: list[DocType] | None,
-) -> dict[DocType, Any]:
-    """Seleciona o subconjunto de stores consultado, espelhando ``run_query``.
-
-    Quando ``doc_types`` é fornecido, apenas as coleções correspondentes são
-    consultadas (mesma regra de ``run_query`` em ``generation/chain.py``);
-    caso contrário, todas as stores. Garante que os ``contexts`` do RAGAS
-    sejam idênticos aos que geraram a resposta.
-
-    Parameters
-    ----------
-    stores : dict[DocType, Any]
-        Vectorstores ChromaDB abertos.
-    doc_types : list[DocType] | None
-        Tipos efetivos (global do CLI ou por pergunta).
-
-    Returns
-    -------
-    dict[DocType, Any]
-        Subconjunto de stores a consultar.
-    """
-    if doc_types:
-        return {dt: stores[dt] for dt in doc_types if dt in stores}
-    return stores
-
-
 def _collect_rows(
     questions: list[GoldenQuestion],
     stores: dict[DocType, Any],
@@ -245,7 +221,8 @@ def _collect_rows(
     """Executa ``retrieve``/``run_query`` por pergunta, montando as linhas do dataset.
 
     ``retrieve`` usa o mesmo subconjunto de stores do ``run_query``
-    (``_build_subset``), mantendo contexts consistentes com a resposta.
+    (``select_collections``, compartilhado com a chain), mantendo contexts
+    consistentes com a resposta.
 
     Parameters
     ----------
@@ -265,7 +242,7 @@ def _collect_rows(
     for q in questions:
         eff_profile = profile or q.profile
         eff_doc_types = doc_types or (q.doc_types or None)
-        subset = _build_subset(stores, eff_doc_types)
+        subset = select_collections(stores, eff_doc_types)
         docs = retrieve(q.question, subset, settings)
         result = run_query(q.question, stores, eff_profile, settings, eff_doc_types)
         rows.append(
@@ -290,16 +267,23 @@ def _collect_rows(
 
 def _evaluate_retrieval_set(
     rows: list[dict[str, Any]],
+    eval_indices: list[int],
     llm: LangchainLLMWrapper,
     embeddings: LangchainEmbeddingsWrapper,
     batch_size: int,
-) -> Any:
-    """Executa ``ragas.evaluate`` do conjunto de retrieval (todas as perguntas).
+) -> Any | None:
+    """Executa ``ragas.evaluate`` do conjunto de retrieval (não-cold-start).
+
+    Avalia apenas as perguntas não-cold-start, no mesmo subconjunto da
+    geração: cold starts têm ``contexts=[]`` e pontuariam 0 em
+    ContextPrecision/ContextRecall, enviesando as agregadas de retrieval.
 
     Parameters
     ----------
     rows : list[dict[str, Any]]
         Linhas com ``question``/``contexts``/``reference_answer``.
+    eval_indices : list[int]
+        Índices das perguntas avaliadas (não-cold-start) no dataset.
     llm : LangchainLLMWrapper
         LLM judge do LM Studio.
     embeddings : LangchainEmbeddingsWrapper
@@ -309,11 +293,17 @@ def _evaluate_retrieval_set(
 
     Returns
     -------
-    Any
-        ``EvaluationResult`` do RAGAS com ContextPrecision/ContextRecall.
+    Any | None
+        ``EvaluationResult`` do RAGAS com ContextPrecision/ContextRecall, ou
+        ``None`` quando nenhuma pergunta não-cold-start existe.
     """
+    if not eval_indices:
+        logger.warning(
+            "Retrieval: nenhuma pergunta não-cold-start — sem métricas de retrieval."
+        )
+        return None
     return evaluate(
-        Dataset.from_list(rows),
+        Dataset.from_list([rows[i] for i in eval_indices]),
         metrics=[ContextPrecision(), ContextRecall()],
         llm=llm,
         embeddings=embeddings,
@@ -324,7 +314,7 @@ def _evaluate_retrieval_set(
 
 def _evaluate_generation_set(
     rows: list[dict[str, Any]],
-    gen_indices: list[int],
+    eval_indices: list[int],
     llm: LangchainLLMWrapper,
     embeddings: LangchainEmbeddingsWrapper,
     batch_size: int,
@@ -335,7 +325,7 @@ def _evaluate_generation_set(
     ----------
     rows : list[dict[str, Any]]
         Linhas com ``question``/``contexts``/``answer``/``reference_answer``.
-    gen_indices : list[int]
+    eval_indices : list[int]
         Índices das perguntas não-cold-start no dataset de retrieval.
     llm : LangchainLLMWrapper
         LLM judge do LM Studio.
@@ -350,13 +340,13 @@ def _evaluate_generation_set(
         ``EvaluationResult`` do RAGAS com Faithfulness/AnswerRelevancy, ou
         ``None`` quando nenhuma pergunta não-cold-start existe.
     """
-    if not gen_indices:
+    if not eval_indices:
         logger.warning(
             "Geração: nenhuma pergunta não-cold-start — sem métricas de geração."
         )
         return None
     return evaluate(
-        Dataset.from_list([rows[i] for i in gen_indices]),
+        Dataset.from_list([rows[i] for i in eval_indices]),
         metrics=[Faithfulness(), AnswerRelevancy()],
         llm=llm,
         embeddings=embeddings,
@@ -368,16 +358,21 @@ def _evaluate_generation_set(
 def _build_per_question(
     rows: list[dict[str, Any]],
     cold_flags: list[bool],
-    retrieval_result: Any,
+    retrieval_result: Any | None,
     generation_result: Any | None,
 ) -> list[QuestionEvalRow]:
     """Monta os ``QuestionEvalRow`` mapeando os scores do RAGAS por pergunta.
+
+    Ambos os resultados do RAGAS estão indexados sobre o subconjunto
+    não-cold-start (o mesmo de geração); por isso um único contador ``pos``
+    serve para retrieval e geração. Perguntas cold start recebem ``None`` em
+    todas as métricas.
 
     Parameters
     ----------
     rows : list[dict[str, Any]]
     cold_flags : list[bool]
-    retrieval_result : Any
+    retrieval_result : Any | None
     generation_result : Any | None
 
     Returns
@@ -386,23 +381,27 @@ def _build_per_question(
         Avaliação consolidada por pergunta, na mesma ordem de ``rows``.
     """
     per_question: list[QuestionEvalRow] = []
-    gen_pos = 0
-    for i, (row, is_cold) in enumerate(zip(rows, cold_flags, strict=True)):
-        qmetrics: dict[str, float | None] = {
-            "context_precision": _score_at(retrieval_result, i, "context_precision"),
-            "context_recall": _score_at(retrieval_result, i, "context_recall"),
-        }
+    pos = 0
+    for row, is_cold in zip(rows, cold_flags, strict=True):
         if is_cold:
-            qmetrics["faithfulness"] = None
-            qmetrics["answer_relevancy"] = None
+            qmetrics: dict[str, float | None] = {
+                "context_precision": None,
+                "context_recall": None,
+                "faithfulness": None,
+                "answer_relevancy": None,
+            }
         else:
-            qmetrics["faithfulness"] = _score_at(
-                generation_result, gen_pos, "faithfulness"
-            )
-            qmetrics["answer_relevancy"] = _score_at(
-                generation_result, gen_pos, "answer_relevancy"
-            )
-            gen_pos += 1
+            qmetrics = {
+                "context_precision": _score_at(
+                    retrieval_result, pos, "context_precision"
+                ),
+                "context_recall": _score_at(retrieval_result, pos, "context_recall"),
+                "faithfulness": _score_at(generation_result, pos, "faithfulness"),
+                "answer_relevancy": _score_at(
+                    generation_result, pos, "answer_relevancy"
+                ),
+            }
+            pos += 1
         per_question.append(
             QuestionEvalRow(
                 question=row["question"],
@@ -441,6 +440,37 @@ def _build_aggregates(
     }
 
 
+def _evaluate_sets(
+    rows: list[dict[str, Any]],
+    eval_indices: list[int],
+    settings: Settings,
+    batch_size: int,
+) -> tuple[Any | None, Any | None]:
+    """Avalia retrieval e geração sobre o mesmo subconjunto não-cold-start.
+
+    Parameters
+    ----------
+    rows : list[dict[str, Any]]
+    eval_indices : list[int]
+    settings : Settings
+    batch_size : int
+
+    Returns
+    -------
+    tuple[Any | None, Any | None]
+        Resultados de retrieval e de geração (``None`` quando vazios).
+    """
+    llm = build_eval_llm(settings)
+    embeddings = build_eval_embeddings(settings)
+    ret_result = _evaluate_retrieval_set(
+        rows, eval_indices, llm, embeddings, batch_size
+    )
+    gen_result = _evaluate_generation_set(
+        rows, eval_indices, llm, embeddings, batch_size
+    )
+    return ret_result, gen_result
+
+
 def evaluate_golden_set(
     questions: list[GoldenQuestion],
     stores: dict[DocType, Any],
@@ -453,9 +483,10 @@ def evaluate_golden_set(
     """Avalia o pipeline RAG sobre um golden set, sem passar pela API HTTP.
 
     ``retrieve`` usa o mesmo subconjunto de stores do ``run_query``
-    (``_build_subset``): contexts idênticos à resposta; retrieve explícito
+    (``select_collections``): contexts idênticos à resposta; retrieve explícito
     porque ``GenerationResult`` não os carrega (2 retrievals/pergunta, aceito).
-    Roda ``ragas.evaluate`` duas vezes: retrieval (todas) e geração.
+    Roda ``ragas.evaluate`` duas vezes sobre o mesmo subconjunto não-cold-start:
+    retrieval (ContextPrecision/Recall) e geração (Faithfulness/Relevancy).
 
     Parameters
     ----------
@@ -478,16 +509,14 @@ def evaluate_golden_set(
     batch = batch_size or settings.eval_batch_size
 
     rows, cold_flags = _collect_rows(questions, stores, settings, profile, doc_types)
-    gen_indices = [i for i, flag in enumerate(cold_flags) if not flag]
-    llm = build_eval_llm(settings)
-    embeddings = build_eval_embeddings(settings)
-    ret_result = _evaluate_retrieval_set(rows, llm, embeddings, batch)
-    gen_result = _evaluate_generation_set(rows, gen_indices, llm, embeddings, batch)
+    eval_indices = [i for i, flag in enumerate(cold_flags) if not flag]
+    ret_result, gen_result = _evaluate_sets(rows, eval_indices, settings, batch)
 
     return EvaluationReport(
         aggregates=_build_aggregates(ret_result, gen_result),
         per_question=_build_per_question(rows, cold_flags, ret_result, gen_result),
         num_questions=len(rows),
         num_cold_start=sum(cold_flags),
-        num_generation_evaluated=len(gen_indices),
+        num_retrieval_evaluated=len(eval_indices),
+        num_generation_evaluated=len(eval_indices),
     )

@@ -122,13 +122,11 @@ class TestEvaluateGoldenSet:
             calls["column_map"] = kwargs.get("column_map")
             calls["batch_size"] = kwargs.get("batch_size")
             if names == {"context_precision", "context_recall"}:
-                return _eval_result(
-                    [
-                        {"context_precision": 1.0, "context_recall": 0.8},
-                        {"context_precision": 0.0, "context_recall": 0.0},
-                        {"context_precision": 0.5, "context_recall": 0.4},
-                    ]
-                )
+                per_row = [
+                    {"context_precision": 1.0, "context_recall": 0.8},
+                    {"context_precision": 0.5, "context_recall": 0.4},
+                ]
+                return _eval_result(per_row[: len(dataset)])
             return _eval_result(
                 [
                     {"faithfulness": 0.9, "answer_relevancy": 0.7},
@@ -147,8 +145,9 @@ class TestEvaluateGoldenSet:
         assert report.num_questions == 3
         assert report.num_cold_start == 1
         assert report.num_generation_evaluated == 2
-        assert report.aggregates["context_precision"] == pytest.approx(0.5)
-        assert report.aggregates["context_recall"] == pytest.approx(0.4)
+        assert report.num_retrieval_evaluated == 2
+        assert report.aggregates["context_precision"] == pytest.approx(0.75)
+        assert report.aggregates["context_recall"] == pytest.approx(0.6)
         assert report.aggregates["faithfulness"] == pytest.approx(0.85)
         assert report.aggregates["answer_relevancy"] == pytest.approx(0.65)
         assert calls["column_map"] == {"reference": "reference_answer"}
@@ -159,12 +158,15 @@ class TestEvaluateGoldenSet:
         assert cold_row.is_cold_start is True
         assert cold_row.answer == "C2"
         assert cold_row.contexts == ["ctx-Q2"]
-        assert cold_row.metrics["context_precision"] == pytest.approx(0.0)
+        assert cold_row.metrics["context_precision"] is None
+        assert cold_row.metrics["context_recall"] is None
         assert cold_row.metrics["faithfulness"] is None
         assert cold_row.metrics["answer_relevancy"] is None
 
         normal_row = report.per_question[0]
         assert normal_row.is_cold_start is False
+        assert normal_row.metrics["context_precision"] == pytest.approx(1.0)
+        assert normal_row.metrics["context_recall"] == pytest.approx(0.8)
         assert normal_row.metrics["faithfulness"] == pytest.approx(0.9)
         assert normal_row.metrics["answer_relevancy"] == pytest.approx(0.7)
 
@@ -350,12 +352,17 @@ class TestEvaluateGoldenSet:
         ]
         report = evaluate_golden_set(questions, stores={}, settings=_settings())
 
-        assert mock_evaluate.call_count == 1
+        assert mock_evaluate.call_count == 0
         assert report.num_cold_start == 2
         assert report.num_generation_evaluated == 0
+        assert report.num_retrieval_evaluated == 0
+        assert report.aggregates["context_precision"] is None
+        assert report.aggregates["context_recall"] is None
         assert report.aggregates["faithfulness"] is None
         assert report.aggregates["answer_relevancy"] is None
         for row in report.per_question:
+            assert row.metrics["context_precision"] is None
+            assert row.metrics["context_recall"] is None
             assert row.metrics["faithfulness"] is None
             assert row.metrics["answer_relevancy"] is None
 

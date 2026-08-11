@@ -66,6 +66,7 @@ def _report() -> EvaluationReport:
         num_questions=1,
         num_cold_start=0,
         num_generation_evaluated=1,
+        num_retrieval_evaluated=1,
     )
 
 
@@ -93,7 +94,7 @@ class TestParseArgs:
         assert args.dataset == Path("evals/dataset/golden_set.json")
         assert args.top_k is None
         assert args.n is None
-        assert args.profile == "medico"
+        assert args.profile is None
         assert args.doc_types is None
         assert args.output is None
 
@@ -241,6 +242,22 @@ class TestMainSuccess:
         assert main(["--n", "2"]) == 0
         assert len(mock_eval.call_args.args[0]) == 2
 
+    def test_no_profile_passes_none_so_golden_profiles_are_honored(
+        self, mocker: MagicMock
+    ) -> None:
+        mocker.patch("evaluate_rag.get_settings", return_value=_settings())
+        mocker.patch("evaluate_rag.load_golden_set", return_value=_golden_set(1))
+        mocker.patch("evaluate_rag.httpx.get", return_value=MagicMock(status_code=200))
+        _patch_probe(mocker, dict.fromkeys(DocType, 3))
+        mock_eval = mocker.patch(
+            "evaluate_rag.evaluate_golden_set", return_value=_report()
+        )
+
+        from evaluate_rag import main
+
+        assert main([]) == 0
+        assert mock_eval.call_args.kwargs["profile"] is None
+
     def test_all_cold_start_generation_empty_returns_1(self, mocker: MagicMock) -> None:
         mocker.patch("evaluate_rag.get_settings", return_value=_settings())
         mocker.patch("evaluate_rag.load_golden_set", return_value=_golden_set(1))
@@ -254,6 +271,7 @@ class TestMainSuccess:
                 num_questions=1,
                 num_cold_start=1,
                 num_generation_evaluated=0,
+                num_retrieval_evaluated=0,
             ),
         )
 
@@ -276,6 +294,7 @@ class TestMainSuccess:
         payload = json.loads(output.read_text(encoding="utf-8"))
         assert "aggregates" in payload
         assert payload["counts"]["generation_evaluated"] == 1
+        assert payload["counts"]["retrieval_evaluated"] == 1
         assert payload["per_question"][0]["metrics"]["faithfulness"] == pytest.approx(
             0.8
         )

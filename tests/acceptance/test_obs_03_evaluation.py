@@ -25,8 +25,9 @@ Cobertura por critério de aceitação:
   retorna != 0, ``evaluate_golden_set`` não é chamada e o timeout
   configurado é respeitado (fail-fast, sem timeout longo).
 - CA-05: stores reais efêmeras + 1 doc relevante + pergunta fora do corpus
-  (cold start sinalizada pelo boundary do pipeline) → ``num_cold_start >= 1``
-  e a pergunta cold start excluída de Faithfulness/AnswerRelevancy.
+  (cold start sinalizada pelo boundary do pipeline) → ``num_cold_start >= 1``,
+  a pergunta cold start excluída das métricas de geração e também das de
+  retrieval (``num_retrieval_evaluated`` conta só não-cold-start).
 - CA-06: código de saída 0/!=0 em: dataset inválido, coleção vazia, LM Studio
   fora e sucesso.
 - CA-07: a avaliação resolve cada pergunta via ``retrieve``/``run_query``
@@ -476,6 +477,7 @@ class TestCA05ColdStart:
         assert report.num_generation_evaluated == (
             report.num_questions - report.num_cold_start
         )
+        assert report.num_retrieval_evaluated == report.num_generation_evaluated
         assert spy_retrieve.call_count == len(questions)
         first_args = spy_retrieve.call_args_list[0].args
         assert first_args[1] == {DocType.BULA: stores[DocType.BULA]}
@@ -487,14 +489,19 @@ class TestCA05ColdStart:
         for row in cold_rows:
             assert row.metrics["faithfulness"] is None
             assert row.metrics["answer_relevancy"] is None
-            assert row.metrics["context_precision"] is not None
+            assert row.metrics["context_precision"] is None
+            assert row.metrics["context_recall"] is None
 
         names_by_call = [set(names) for _, names, _, _ in eval_calls]
         assert {"context_precision", "context_recall"} in names_by_call
         assert {"faithfulness", "answer_relevancy"} in names_by_call
 
         retrieval_dataset = eval_calls[0][0]
-        assert len(retrieval_dataset) == report.num_questions
+        assert len(retrieval_dataset) == report.num_retrieval_evaluated
+        assert (
+            "Como tratar pneumonia fúngica em camaleões?"
+            not in retrieval_dataset["question"]
+        )
         gen_dataset, _, _, _ = eval_calls[1]
         assert len(gen_dataset) == report.num_generation_evaluated
         assert (
@@ -582,6 +589,7 @@ class TestCA06ExitCodes:
             num_questions=2,
             num_cold_start=1,
             num_generation_evaluated=1,
+            num_retrieval_evaluated=1,
         )
         mocker.patch("evaluate_rag.evaluate_golden_set", return_value=report)
 

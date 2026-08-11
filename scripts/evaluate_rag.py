@@ -70,8 +70,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--profile",
         choices=_PROFILE_CHOICES,
-        default=UserProfile.MEDICO.value,
-        help="Perfil de geração/judge.",
+        default=None,
+        help="Perfil de geração/judge (None = usa o profile de cada pergunta "
+        "do golden set).",
     )
     parser.add_argument(
         "--doc-types",
@@ -223,6 +224,7 @@ def _print_report(report: EvaluationReport) -> None:
         print(f"  {metric}: {display}")
     print(
         f"  perguntas: {report.num_questions} | cold start: {report.num_cold_start} "
+        f"| avaliadas em retrieval: {report.num_retrieval_evaluated} "
         f"| avaliadas em geração: {report.num_generation_evaluated}"
     )
     print("\nPor pergunta:")
@@ -261,6 +263,7 @@ def _write_report(
         "counts": {
             "questions": report.num_questions,
             "cold_start": report.num_cold_start,
+            "retrieval_evaluated": report.num_retrieval_evaluated,
             "generation_evaluated": report.num_generation_evaluated,
         },
         "per_question": [
@@ -308,13 +311,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     stores, questions = prepared
     doc_types = [DocType(v) for v in args.doc_types] if args.doc_types else None
+    profile = UserProfile(args.profile) if args.profile else None
 
     try:
         report = evaluate_golden_set(
             questions,
             stores,
             settings,
-            profile=UserProfile(args.profile),
+            profile=profile,
             doc_types=doc_types,
             top_k=args.top_k,
         )
