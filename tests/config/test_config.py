@@ -54,3 +54,23 @@ class TestSettingsAdminKeyValidation:
     def test_long_strong_key_accepted(self) -> None:
         settings = Settings(admin_api_key=SecretStr("a" * 64))
         assert settings.admin_api_key.get_secret_value() == "a" * 64
+
+
+class TestSettingsLogLevelValidation:
+    def test_default_log_level_is_info(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.log_level == "INFO"
+
+    def test_log_level_normalized_to_upper(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            log_level="debug",
+        )
+        assert settings.log_level == "DEBUG"
+
+    def test_invalid_log_level_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                log_level="verbose",
+            )

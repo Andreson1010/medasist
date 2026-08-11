@@ -19,6 +19,7 @@ from medasist.config import (
     get_settings,
 )
 from medasist.generation.chain import build_chain
+from medasist.logging_setup import configure_logging
 from medasist.profiles.schemas import UserProfile
 from medasist.vectorstore.store import (
     build_embeddings,
@@ -33,9 +34,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Gerencia o ciclo de vida da aplicação FastAPI.
 
-    No startup, aquece todas as chains RAG (uma por UserProfile) e
-    armazena em ``app.state.chains``. No shutdown, não há cleanup necessário
-    pois ChromaDB usa persistência em disco.
+    No startup, configura o logging estruturado, aquece todas as chains RAG
+    (uma por UserProfile) e armazena em ``app.state.chains``. No shutdown,
+    não há cleanup necessário pois ChromaDB usa persistência em disco.
 
     Parameters
     ----------
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         Instância da aplicação.
     """
     settings = get_settings()
+    configure_logging(settings, "api")
     if admin_key_is_weak(settings.admin_api_key.get_secret_value()):
         logger.warning(
             "ADMIN_API_KEY está usando um valor padrão/placeholder; configure "

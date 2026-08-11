@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Request
@@ -42,13 +43,19 @@ def query(request: Request, body: Annotated[QueryRequest, Body()]) -> QueryRespo
         Resposta com answer, citations, disclaimer e flag de cold start.
     """
     chain = request.app.state.chains[body.profile]
+    start = time.perf_counter()
     result = chain(body.question, body.doc_types)
+    latency_ms = int((time.perf_counter() - start) * 1000)
+
+    doc_types = [dt.value for dt in body.doc_types] if body.doc_types else None
 
     logger.info(
-        "query: profile='%s' cold_start=%s citations=%d",
+        "query: profile='%s' cold_start=%s citations=%d latency_ms=%d doc_types=%s",
         body.profile.value,
         result.is_cold_start,
         len(result.citations),
+        latency_ms,
+        doc_types,
     )
 
     return QueryResponse.from_result(result)

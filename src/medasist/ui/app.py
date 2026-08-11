@@ -5,6 +5,7 @@ import logging
 import streamlit as st
 
 from medasist.config import Settings, get_settings
+from medasist.logging_setup import configure_logging
 from medasist.ui.client import (
     APIError,
     CitationResult,
@@ -229,10 +230,12 @@ def main() -> None:
     """Ponto de entrada da aplicação MedAssist no Streamlit.
 
     Gerencia configuração de página, sidebar, verificação de saúde da API,
-    histórico de chat e o loop principal de consulta/resposta.
+    histórico de chat e o loop principal de consulta/resposta. Configura o
+    logging estruturado no início, antes de qualquer log relevante.
     """
     _configure_page()
     settings = get_settings()
+    configure_logging(settings, "ui")
 
     if _KEY_MESSAGES not in st.session_state:
         st.session_state[_KEY_MESSAGES] = []
