@@ -13,7 +13,7 @@ from medasist.ui.client import (
     RateLimitError,
     RequestTimeoutError,
     ServerError,
-    check_health,
+    get_health,
     query,
 )
 
@@ -95,12 +95,35 @@ def _render_sidebar(settings: Settings) -> tuple[str, list[str]]:
     return profile_key, doc_type_keys
 
 
+def _degraded_dependencies(health: dict) -> list[str]:
+    """Descreve as dependências não-ok do corpo de /health.
+
+    Parameters
+    ----------
+    health : dict
+        Corpo de ``GET /health``.
+
+    Returns
+    -------
+    list[str]
+        Descrições das dependências cujo status difere de ``ok``, no formato
+        ``"Nome (status)"``.
+    """
+    labels = {"chromadb": "ChromaDB", "lm_studio": "LM Studio"}
+    return [
+        f"{labels[name]} ({health.get(name, {}).get('status', 'desconhecido')})"
+        for name in labels
+        if health.get(name, {}).get("status") != "ok"
+    ]
+
+
 def _check_and_warn_health(base_url: str) -> None:
     """Verifica a disponibilidade da API uma vez por sessão.
 
     O flag de verificação é marcado apenas após a chamada completar,
     garantindo que falhas transientes não suprimam avisos futuros.
-    Exibe ``st.warning`` se a API estiver indisponível.
+    Exibe ``st.warning`` quando a API está fora do ar (HTTP não-200) ou quando
+    está no ar mas com dependências degradadas.
 
     Parameters
     ----------
@@ -110,13 +133,19 @@ def _check_and_warn_health(base_url: str) -> None:
     if st.session_state.get(_KEY_HEALTH_CHECKED):
         return
 
-    api_ok = check_health(base_url)
+    health = get_health(base_url)
     st.session_state[_KEY_HEALTH_CHECKED] = True
 
-    if not api_ok:
+    if health is None:
         st.warning(
             "A API MedAssist está indisponível. "
             "Verifique se o servidor está em execução em: " + base_url,
+            icon="⚠️",
+        )
+    elif health.get("status") == "degraded":
+        degraded = ", ".join(_degraded_dependencies(health))
+        st.warning(
+            "A API está no ar, mas há dependências degradadas: " + degraded,
             icon="⚠️",
         )
 

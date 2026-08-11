@@ -10,8 +10,10 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from medasist.api.deps import limiter
+from medasist.api.health import check_dependencies
 from medasist.api.routers.ingest import router as ingest_router
 from medasist.api.routers.query import router as query_router
+from medasist.api.schemas import HealthResponse
 from medasist.config import (
     ADMIN_KEY_MIN_LENGTH,
     admin_key_is_weak,
@@ -90,13 +92,14 @@ app.include_router(query_router)
 app.include_router(ingest_router)
 
 
-@app.get("/health", summary="Health check")
-def health() -> dict[str, str]:
-    """Verifica se a API está em execução.
+@app.get("/health", summary="Health check", response_model=HealthResponse)
+def health() -> HealthResponse:
+    """Verifica a saúde das dependências (ChromaDB e LM Studio).
 
     Returns
     -------
-    dict[str, str]
-        ``{"status": "ok"}``
+    HealthResponse
+        Estado geral e saúde por dependência, com latência em ms.
     """
-    return {"status": "ok"}
+    settings = get_settings()
+    return check_dependencies(settings)

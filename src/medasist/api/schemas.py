@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from enum import StrEnum
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from medasist.generation.chain import GenerationResult
@@ -147,3 +150,57 @@ class IngestResponse(BaseModel):
     chunks_indexed: int
     skipped: bool
     error: str | None = None
+
+
+class DependencyStatus(StrEnum):
+    """Estado de saúde de uma dependência.
+
+    Attributes
+    ----------
+    OK : str
+        Dependência operacional.
+    DEGRADED : str
+        Dependência acessível, mas parcialmente funcional (ex: coleções ausentes).
+    UNAVAILABLE : str
+        Dependência inacessível.
+    """
+
+    OK = "ok"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+
+
+class DependencyHealth(BaseModel):
+    """Saúde de uma dependência do pipeline (ChromaDB ou LM Studio).
+
+    Attributes
+    ----------
+    status : DependencyStatus
+        Estado da dependência.
+    details : str
+        Detalhe legível do resultado do probe.
+    latency_ms : int
+        Latência do probe em milissegundos.
+    """
+
+    status: DependencyStatus
+    details: str
+    latency_ms: int
+
+
+class HealthResponse(BaseModel):
+    """Resposta do endpoint ``GET /health``.
+
+    Attributes
+    ----------
+    status : Literal["ok", "degraded"]
+        Estado geral: ``ok`` se todas as dependências estão ``ok``.
+    chromadb : DependencyHealth
+        Saúde do ChromaDB.
+    lm_studio : DependencyHealth
+        Saúde do LM Studio.
+    """
+
+    status: Literal["ok", "degraded"]
+    chromadb: DependencyHealth
+    lm_studio: DependencyHealth

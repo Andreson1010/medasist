@@ -91,9 +91,11 @@ class QueryResult:
 
 
 def check_health(base_url: str | None = None) -> bool:
-    """Verifica se a API está disponível via GET /health.
+    """Verifica se a API MedAssist responde HTTP 200 em GET /health.
 
-    Nunca levanta exceção — qualquer falha retorna ``False``.
+    Semântica de "API no ar": qualquer resposta HTTP 200 conta como ``True``,
+    mesmo com ``status`` top-level ``"degraded"`` — degradação de dependência é
+    reportada separadamente pela UI via ``get_health``. Nunca levanta exceção.
 
     Parameters
     ----------
@@ -103,19 +105,37 @@ def check_health(base_url: str | None = None) -> bool:
     Returns
     -------
     bool
-        ``True`` quando a API responde ``{"status": "ok"}``.
+        ``True`` quando a API responde HTTP 200 em /health; ``False`` em
+        status não-200, timeout ou erro de conexão.
+    """
+    return get_health(base_url) is not None
+
+
+def get_health(base_url: str | None = None) -> dict | None:
+    """Obtém o corpo de ``GET /health`` da API, ou ``None`` se indisponível.
+
+    Parameters
+    ----------
+    base_url : str | None
+        URL base da API. Usa ``settings.api_base_url`` por padrão.
+
+    Returns
+    -------
+    dict | None
+        Corpo JSON de ``/health`` quando a resposta é HTTP 200; ``None`` em
+        timeout, erro de conexão, status não-200 ou corpo inválido. Nunca
+        levanta exceção.
     """
     url = (base_url or get_settings().api_base_url).rstrip("/")
     try:
         with httpx.Client(timeout=5.0) as client:
             response = client.get(f"{url}/health")
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("status") == "ok"
-            return False
+            if response.status_code != 200:
+                return None
+            return response.json()
     except Exception as exc:
         logger.debug("Falha no health check: %s", exc)
-        return False
+        return None
 
 
 def query(

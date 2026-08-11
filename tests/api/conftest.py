@@ -6,9 +6,19 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from medasist.api.schemas import DependencyHealth, DependencyStatus
 from medasist.generation.chain import GenerationResult
 from medasist.generation.citations import CitationItem
 from medasist.profiles.schemas import UserProfile
+
+
+def _healthy_dependency() -> DependencyHealth:
+    """DependencyHealth padrão para probes mockados no /health."""
+    return DependencyHealth(
+        status=DependencyStatus.OK,
+        details="saudável",
+        latency_ms=1,
+    )
 
 
 def _make_generation_result(
@@ -63,6 +73,14 @@ def client(mock_chain: MagicMock) -> Generator[TestClient, None, None]:
     with (
         patch("medasist.api.main.get_all_vectorstores") as mock_stores,
         patch("medasist.api.main.build_chain") as mock_build,
+        patch(
+            "medasist.api.health.check_chromadb",
+            return_value=_healthy_dependency(),
+        ),
+        patch(
+            "medasist.api.health.check_lm_studio",
+            return_value=_healthy_dependency(),
+        ),
     ):
         mock_stores.return_value = {}
         mock_build.side_effect = lambda stores, profile, settings: chains[profile]

@@ -13,6 +13,7 @@ from medasist.ui.client import (
     RequestTimeoutError,
     ServerError,
     check_health,
+    get_health,
     query,
 )
 
@@ -71,10 +72,10 @@ class TestCheckHealth:
         with patch("medasist.ui.client.httpx.Client", mock_cls):
             assert check_health(base_url) is True
 
-    def test_returns_false_when_unhealthy(self, base_url: str) -> None:
+    def test_returns_true_when_degraded(self, base_url: str) -> None:
         mock_cls, _ = _mock_client(200, {"status": "degraded"})
         with patch("medasist.ui.client.httpx.Client", mock_cls):
-            assert check_health(base_url) is False
+            assert check_health(base_url) is True
 
     def test_returns_false_on_connection_error(self, base_url: str) -> None:
         mock_cls = MagicMock()
@@ -95,6 +96,49 @@ class TestCheckHealth:
         mock_cls, _ = _mock_client(500)
         with patch("medasist.ui.client.httpx.Client", mock_cls):
             assert check_health(base_url) is False
+
+
+# ---------------------------------------------------------------------------
+# TestGetHealth
+# ---------------------------------------------------------------------------
+
+
+class TestGetHealth:
+    def test_returns_body_when_ok(self, base_url: str) -> None:
+        body = {
+            "status": "ok",
+            "chromadb": {"status": "ok", "details": "ok", "latency_ms": 1},
+            "lm_studio": {"status": "ok", "details": "ok", "latency_ms": 1},
+        }
+        mock_cls, _ = _mock_client(200, body)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            assert get_health(base_url) == body
+
+    def test_returns_body_when_degraded(self, base_url: str) -> None:
+        body = {"status": "degraded"}
+        mock_cls, _ = _mock_client(200, body)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            assert get_health(base_url) == body
+
+    def test_returns_none_on_connection_error(self, base_url: str) -> None:
+        mock_cls = MagicMock()
+        mock_cls.return_value.__enter__.side_effect = httpx.ConnectError("refused")
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            assert get_health(base_url) is None
+
+    def test_returns_none_on_timeout(self, base_url: str) -> None:
+        mock_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.get.side_effect = httpx.TimeoutException("timeout")
+        mock_cls.return_value.__enter__.return_value = mock_instance
+        mock_cls.return_value.__exit__.return_value = False
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            assert get_health(base_url) is None
+
+    def test_returns_none_on_500(self, base_url: str) -> None:
+        mock_cls, _ = _mock_client(500)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            assert get_health(base_url) is None
 
 
 # ---------------------------------------------------------------------------
