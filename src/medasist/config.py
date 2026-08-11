@@ -93,6 +93,8 @@ class Settings(BaseSettings):
         Permite credenciais nas requisições CORS (padrão: ``False``).
     api_base_url : str
         URL base da API consumida pelo Streamlit.
+    healthcheck_timeout : float
+        Tempo limite (em segundos) de cada probe do /health (padrão: 3.0).
     log_level : str
         Nível de log (DEBUG, INFO, WARNING, ERROR, CRITICAL).
     log_dir : Path
@@ -211,6 +213,9 @@ class Settings(BaseSettings):
     # UI
     api_base_url: str = Field(default="http://localhost:8000")
     ui_request_timeout: float = Field(default=120.0, gt=0)
+
+    # Health check
+    healthcheck_timeout: float = Field(default=3.0, gt=0)
 
     # Logs
     log_level: str = Field(default="INFO")

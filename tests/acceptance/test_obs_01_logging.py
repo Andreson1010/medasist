@@ -34,6 +34,7 @@ import chromadb
 from fastapi.testclient import TestClient
 from langchain_core.embeddings import Embeddings
 
+from medasist.api.schemas import DependencyHealth, DependencyStatus
 from medasist.config import Settings
 from medasist.generation.chain import GenerationResult
 from medasist.generation.citations import CitationItem
@@ -164,6 +165,22 @@ def _client(settings: Settings, chain: MagicMock) -> Iterator[TestClient]:
         patch(
             "medasist.api.main.build_chain",
             side_effect=lambda stores, profile, settings: chains[profile],
+        ),
+        patch(
+            "medasist.api.health.check_chromadb",
+            return_value=DependencyHealth(
+                status=DependencyStatus.OK,
+                details="saudável",
+                latency_ms=1,
+            ),
+        ),
+        patch(
+            "medasist.api.health.check_lm_studio",
+            return_value=DependencyHealth(
+                status=DependencyStatus.OK,
+                details="saudável",
+                latency_ms=1,
+            ),
         ),
     ):
         from medasist.api.main import app

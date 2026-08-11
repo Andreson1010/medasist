@@ -74,3 +74,23 @@ class TestSettingsLogLevelValidation:
                 admin_api_key=SecretStr("very-strong-key-0123456789"),
                 log_level="verbose",
             )
+
+
+class TestSettingsHealthcheckTimeout:
+    def test_default_healthcheck_timeout_is_3(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.healthcheck_timeout == 3.0
+
+    def test_custom_healthcheck_timeout_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            healthcheck_timeout=1.5,
+        )
+        assert settings.healthcheck_timeout == 1.5
+
+    def test_zero_healthcheck_timeout_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                healthcheck_timeout=0,
+            )
