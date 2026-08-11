@@ -69,7 +69,7 @@ UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + LM St
 
 **`src/medasist/profiles/schemas.py`** — enum `UserProfile` (`MEDICO`, `ENFERMEIRO`, `ASSISTENTE`, `PACIENTE`) e `ProfileConfig` com `temperature`, `max_tokens`, `prompt_template`. Temperaturas: médico → 0.1, enfermeiro → 0.15, assistente → 0.2, paciente → 0.3.
 
-**`src/medasist/evaluation/`** — avaliação offline do RAG via RAGAS: `dataset.py` valida o golden set (`evals/dataset/golden_set.json`) e `metrics.py` executa `evaluate_golden_set` (retrieve + run_query por pergunta, 4 métricas: ContextPrecision/ContextRecall sobre todas as perguntas e Faithfulness/AnswerRelevancy sobre as não-cold-start). Nunca passa pela API HTTP.
+**`src/medasist/evaluation/`** — avaliação offline do RAG via RAGAS: `dataset.py` valida o golden set (`evals/dataset/golden_set.json`) e `metrics.py` executa `evaluate_golden_set` (retrieve + run_query por pergunta, 4 métricas sobre o subconjunto não-cold-start: ContextPrecision/ContextRecall e Faithfulness/AnswerRelevancy). Nunca passa pela API HTTP.
 
 **`src/medasist/api/`** — FastAPI com lifespan que aquece todas as chains no startup. `POST /query` recebe `QueryRequest(question, profile, doc_types?)` e retorna `QueryResponse(answer, citations, profile, disclaimer)`. `POST /ingest` requer header `X-Admin-Key`. Rate limiting via `slowapi`.
 

@@ -20,7 +20,7 @@ evals/results/                     # relatórios de saída — gitignored
 ```
 
 Princípios:
-- **Somente leitura** no pipeline existente: `retrieve()` e `run_query()` são usados como estão. **Zero** mudanças em `retriever.py`, `chain.py`, `api/`.
+- **Somente leitura** no pipeline existente: `retrieve()` e `run_query()` são usados como estão. **Zero** mudanças em `api/`; em `retriever.py`/`chain.py` apenas a extração do helper compartilhado `select_collections` (refactor sem mudança de comportamento — ver §3.2).
 - Offline: LLM/embeddings apontam só para `lm_studio_base_url`; nada de nuvem.
 - Sem passagem pela API HTTP: o script chama as funções de biblioteca diretamente.
 
@@ -137,12 +137,11 @@ def evaluate_golden_set(
 Fluxo:
 
 1. **Settings efetivos:** se `top_k` informado → `settings = settings.model_copy(update={"retrieval_top_k": top_k})`; caso contrário usa `settings` como está. `batch_size` default = `settings.eval_batch_size`.
-2. **`contexts` por pergunta:** `retrieve(question, stores, settings)` → `[d.page_content for d in docs]` (docs já ordenados por distância L2 e filtrados pelo threshold). `run_query` chama o retriever internamente — a avaliação **não** re-executa retrieval separadamente para montar contexts (a resposta já veio do mesmo retrieval). Consequência de projeto: contexts recuperados e contexts do answer são **idênticos** (mesmo `stores`/`settings`), garantindo consistência para as 4 métricas.
+2. **`contexts` por pergunta:** `evaluate_golden_set` chama `retrieve(question, stores, settings)` **explicitamente** por pergunta porque `GenerationResult` não carrega os contexts recuperados (2 retrievals/pergunta, aceito). `retrieve` e `run_query` usam o mesmo subconjunto de stores via **`select_collections`** (helper compartilhado em `retriever.py`, refatorado para que retrieval e geração não divirjam): contexts recuperados e contexts do answer são **idênticos** (mesmo `stores`/`settings`), garantindo consistência para as 4 métricas.
 3. **`answer` + `is_cold_start` por pergunta:** `run_query(question, stores, profile, settings, doc_types)` → `GenerationResult`; usa `result.answer`, `result.is_cold_start`. Respeita `doc_types` do golden set por pergunta quando `doc_types` global não foi passado (o mais específico vence — decisão: o `doc_types` global do CLI tem precedência).
-4. **Particionamento cold start (REQ-5, estratégia 2 — preferida):**
-   - **Retrieval set:** todas as perguntas (ContextPrecision/ContextRecall valem mesmo com 0 contexts; contextos vazios → pontuação 0, sinalizando perda de retrieval).
-   - **Geração set:** apenas perguntas com `is_cold_start == False` (Faithfulness/AnswerRelevancy).
-   - Roda `ragas.evaluate` duas vezes: uma por subconjunto, com `metrics` adequadas. Resultado final: dicionário com agregadas por subconjunto + contagens.
+4. **Particionamento cold start (REQ-5, estratégia 2 — revisada em review):**
+   - **Retrieval set e geração set:** apenas perguntas não-cold-start (`is_cold_start == False`), num único subconjunto avaliado pelas 4 métricas. Cold starts ficam de fora porque teriam `contexts=[]` e pontuariam 0 em ContextPrecision/ContextRecall, enviesando as agregadas de retrieval e confundindo "cold start correto" com "falha de retrieval".
+   - Roda `ragas.evaluate` duas vezes sobre o mesmo subconjunto: retrieval (ContextPrecision/Recall) e geração (Faithfulness/Relevancy). Contagens reportadas: `num_retrieval_evaluated == num_generation_evaluated` (tamanho do subconjunto).
 5. **Erro de RAGAS:** exceção propagada com mensagem limpa (o script faz `logger.error` + retorno `1` — REQ-13).
 
 ### 3.3 Estrutura de resultado
@@ -165,6 +164,7 @@ class EvaluationReport:
     num_questions: int
     num_cold_start: int
     num_generation_evaluated: int
+    num_retrieval_evaluated: int        # == num_generation_evaluated (mesmo subconjunto)
 ```
 
 ## 4. Módulo `__init__.py`
@@ -188,7 +188,7 @@ python scripts/evaluate_rag.py [--dataset PATH] [--top-k N] [--n N]
 | `--dataset` | `settings.eval_golden_set_path` | Caminho do golden set. |
 | `--top-k` | `settings.retrieval_top_k` | Sobrescreve `retrieval_top_k` (via `model_copy`). |
 | `--n` | `None` (todos) | Limita o nº de perguntas avaliadas. |
-| `--profile` | `medico` | Perfil de geração/judge. |
+| `--profile` | `None` (profile por pergunta) | Perfil de geração/judge; se omitido, usa o `profile` de cada pergunta do golden set. |
 | `--doc-types` | `None` (todas) | Filtra coleções (nargs="+"). |
 | `--output` | `None` | Grava relatório JSON (não versionado — `evals/results/`). |
 
@@ -219,7 +219,7 @@ Convenção seguida de `ingest_docs.py`: `from __future__ import annotations`, `
     "faithfulness": 0.81,
     "answer_relevancy": 0.78
   },
-  "counts": { "questions": 9, "cold_start": 2, "generation_evaluated": 7 },
+  "counts": { "questions": 9, "cold_start": 2, "retrieval_evaluated": 7, "generation_evaluated": 7 },
   "per_question": [
     {
       "question": "Qual a dose inicial de Alphazol...?",
@@ -300,8 +300,8 @@ config.py (4 settings)
                        └─► evals/dataset/golden_set.json
 ```
 
-`evaluate_golden_set` depende de `retrieve` (retriever) e `run_query` (chain) — **sem modificá-los**.
+`evaluate_golden_set` depende de `retrieve` (retriever), `select_collections` (retriever) e `run_query` (chain) — usados como estão, sem modificá-los.
 
 ## 10. Fora de escopo (confirmado)
 
-- Endpoint de avaliação na API; CI integrado; dados reais; citações com seção/página; métricas além das 4; exposição de scores de retrieval; alteração de `retriever.py`/`chain.py`/`api/`.
+- Endpoint de avaliação na API; CI integrado; dados reais; citações com seção/página; métricas além das 4; exposição de scores de retrieval; alteração de `api/` (e de `retriever.py`/`chain.py` além do helper compartilhado `select_collections`, já extraído).
