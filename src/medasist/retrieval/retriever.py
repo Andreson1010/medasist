@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from langchain_chroma import Chroma
@@ -115,6 +116,7 @@ def retrieve(
 
     k = settings.retrieval_top_k
     threshold = settings.retrieval_score_threshold
+    start = time.perf_counter()
 
     candidates: list[tuple[Document, float]] = []
     failed_stores: list[str] = []
@@ -137,6 +139,8 @@ def retrieve(
             logger.exception("Erro ao consultar store '%s'", doc_type.value)
             failed_stores.append(doc_type.value)
 
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+
     if not candidates:
         if failed_stores:
             logger.error(
@@ -150,6 +154,9 @@ def retrieve(
                 threshold,
                 query[:50],
             )
+        _log_retrieve_metric(
+            query, stores, [], [], elapsed_ms, failed_stores=failed_stores
+        )
         return []
 
     # Remove duplicatas por page_content, mantém o de menor distância
@@ -161,9 +168,62 @@ def retrieve(
 
     # Ordena por distância crescente e respeita top_k
     sorted_docs = sorted(seen.values(), key=lambda x: x[1])
-    top_docs = [doc for doc, _ in sorted_docs[:k]]
+    top_docs = sorted_docs[:k]
+    scores = [score for _, score in top_docs]
 
     logger.debug(
         "retrieve retorna %d documento(s) após deduplicação e top_k.", len(top_docs)
     )
-    return top_docs
+    _log_retrieve_metric(
+        query, stores, top_docs, scores, elapsed_ms, failed_stores=failed_stores
+    )
+    return [doc for doc, _ in top_docs]
+
+
+def _log_retrieve_metric(
+    query: str,
+    stores: dict[DocType, Chroma],
+    docs: list[Document],
+    scores: list[float],
+    latency_ms: int,
+    *,
+    failed_stores: list[str],
+) -> None:
+    """Registra métrica consolidada de retrieval por query.
+
+    Um único registro por query com os campos ``doc_types``, ``chunks``,
+    ``scores``, ``latency_ms`` e ``cold_start``. Quando alguma store falhou,
+    adiciona ``failed_stores``. A query é truncada a 50 caracteres (padrão
+    existente do retriever) e nenhum dado de paciente é registrado.
+
+    Parameters
+    ----------
+    query : str
+        Pergunta do usuário.
+    stores : dict[DocType, Chroma]
+        Stores consultadas.
+    docs : list[Document]
+        Documentos retornados.
+    scores : list[float]
+        Distâncias L2 dos documentos retornados (paralelo a ``docs``).
+    latency_ms : int
+        Latência total do loop de stores em milissegundos.
+    failed_stores : list[str]
+        Stores que falharam durante a consulta.
+    """
+    message = (
+        "retrieve: query='%s' doc_types=%s chunks=%d scores=%s latency_ms=%d "
+        "cold_start=%s"
+    )
+    args: list[Any] = [
+        query[:50],
+        [dt.value for dt in stores],
+        len(docs),
+        scores,
+        latency_ms,
+        not docs,
+    ]
+    if failed_stores:
+        message += " failed_stores=%s"
+        args.append(failed_stores)
+    logger.info(message, *args)

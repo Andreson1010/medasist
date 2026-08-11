@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 ADMIN_KEY_MIN_LENGTH: int = 16
 _INSECURE_ADMIN_KEYS: tuple[str, ...] = ("dev-only", "troque-por-chave-segura")
+_LOG_LEVELS: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 
 def admin_key_is_weak(value: str) -> bool:
@@ -93,7 +94,7 @@ class Settings(BaseSettings):
     api_base_url : str
         URL base da API consumida pelo Streamlit.
     log_level : str
-        Nível de log (INFO, DEBUG, WARNING, ERROR).
+        Nível de log (DEBUG, INFO, WARNING, ERROR, CRITICAL).
     log_dir : Path
         Diretório de saída dos logs estruturados.
     retrieval_top_k : int
@@ -175,6 +176,37 @@ class Settings(BaseSettings):
                 "padrão/placeholder."
             )
         return v
+
+    @field_validator("log_level")
+    @classmethod
+    def _validate_log_level(cls, v: str) -> str:
+        """Valida e normaliza o nível de log para letras maiúsculas.
+
+        Aceita ``DEBUG, INFO, WARNING, ERROR, CRITICAL`` (case-insensitive).
+        Valores inválidos falham no startup (fail-fast), evitando que a
+        aplicação rode com um nível de log desconhecido.
+
+        Parameters
+        ----------
+        v : str
+            Valor do campo ``log_level``.
+
+        Returns
+        -------
+        str
+            Nível normalizado em letras maiúsculas.
+
+        Raises
+        ------
+        ValueError
+            Se o valor não for um nível de log válido.
+        """
+        normalized = v.strip().upper()
+        if normalized not in _LOG_LEVELS:
+            raise ValueError(
+                f"log_level inválido '{v}'. Use um de: {', '.join(_LOG_LEVELS)}."
+            )
+        return normalized
 
     # UI
     api_base_url: str = Field(default="http://localhost:8000")

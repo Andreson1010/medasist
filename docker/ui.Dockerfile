@@ -16,6 +16,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir -e . --no-deps
 
 RUN useradd -m -u 1001 appuser \
+    && mkdir -p /app/logs \
     && chown -R appuser:appuser /app /opt/venv
 
 USER appuser

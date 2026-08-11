@@ -12,6 +12,7 @@ from medasist.config import ADMIN_KEY_MIN_LENGTH
 @pytest.mark.asyncio
 async def test_lifespan_warns_when_admin_key_weak(
     caplog: pytest.LogCaptureFixture,
+    tmp_path,
 ) -> None:
     """Startup emite warning (sem erro) quando a admin key é weak.
 
@@ -21,6 +22,8 @@ async def test_lifespan_warns_when_admin_key_weak(
     """
     mock_settings = MagicMock()
     mock_settings.admin_api_key.get_secret_value.return_value = "dev-only"
+    mock_settings.log_level = "INFO"
+    mock_settings.log_dir = tmp_path / "logs"
     app = MagicMock()
 
     with (
@@ -43,12 +46,15 @@ async def test_lifespan_warns_when_admin_key_weak(
 @pytest.mark.asyncio
 async def test_lifespan_no_warning_for_strong_key(
     caplog: pytest.LogCaptureFixture,
+    tmp_path,
 ) -> None:
     """Startup NÃO emite warning quando a admin key é forte."""
     mock_settings = MagicMock()
     mock_settings.admin_api_key.get_secret_value.return_value = (
         "test-admin-key-0123456789"
     )
+    mock_settings.log_level = "INFO"
+    mock_settings.log_dir = tmp_path / "logs"
     app = MagicMock()
 
     with (

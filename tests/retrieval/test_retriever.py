@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
+from unittest.mock import MagicMock
+
 import chromadb
 import pytest
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
@@ -261,3 +265,151 @@ def test_retrieve_with_strict_threshold_filters_all(client, settings):
     docs = retrieve("Gammacol pediátrico", {DocType.BULA: store}, settings_strict)
 
     assert docs == []
+
+
+# ---------------------------------------------------------------------------
+# Testes — log de métrica consolidada por query
+# ---------------------------------------------------------------------------
+
+
+def _retrieve_record(caplog) -> logging.LogRecord | None:
+    """Retorna o registro consolidado de retrieval (prefixo ``retrieve:``)."""
+    return next(
+        (r for r in caplog.records if r.getMessage().startswith("retrieve:")),
+        None,
+    )
+
+
+def test_retrieve_logs_consolidated_metric(caplog, stores_with_docs):
+    """retrieve loga record consolidado com chunks, scores, latency_ms e cold_start."""
+    from medasist.retrieval.retriever import retrieve
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("hipertensão", stores_with_docs, settings_loose)
+
+    record = _retrieve_record(caplog)
+    assert record is not None
+    message = record.getMessage()
+    assert f"chunks={len(docs)}" in message
+    assert "latency_ms=" in message
+    assert "cold_start=False" in message
+    assert "doc_types=['bula', 'diretriz']" in message
+
+
+def test_retrieve_logs_scores_parallel_to_returned_docs(caplog, stores_with_docs):
+    """scores no log é paralelo aos documentos retornados (mesma contagem)."""
+    from medasist.retrieval.retriever import retrieve
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("hipertensão", stores_with_docs, settings_loose)
+
+    record = _retrieve_record(caplog)
+    assert record is not None
+    scores = list(record.args[3])
+    assert len(scores) == len(docs)
+
+
+def test_retrieve_cold_start_logs_metric(caplog, empty_stores, settings):
+    """Cold start: record consolidado com cold_start=true, chunks=0 e scores vazio."""
+    from medasist.retrieval.retriever import retrieve
+
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("qualquer consulta médica", empty_stores, settings)
+
+    assert docs == []
+    record = _retrieve_record(caplog)
+    assert record is not None
+    message = record.getMessage()
+    assert "cold_start=True" in message
+    assert "chunks=0" in message
+    assert "scores=[]" in message
+
+
+def test_retrieve_continues_when_one_store_fails_and_logs_failed_store(
+    caplog, client, embeddings, settings
+):
+    """Store que falha não interrompe o fluxo e é listada em failed_stores.
+
+    Monta um store saudável (BULA com docs) e um store mock que levanta
+    ``RuntimeError`` em ``similarity_search_with_score``. ``retrieve`` deve
+    retornar os docs do store saudável e o record consolidado deve conter
+    ``failed_stores`` com o nome do store que falhou, além de ``latency_ms``
+    e ``chunks`` correspondente aos docs retornados.
+    """
+    from medasist.retrieval.retriever import retrieve
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    store_bula = get_vectorstore(DocType.BULA, client, embeddings, settings_loose)
+    store_bula.add_texts(
+        texts=["Alphazol X: indicado para hipertensão arterial sistêmica."],
+        metadatas=[{"doc_type": "bula", "source": "alphazol.pdf", "page": 1}],
+        ids=["bula_001"],
+    )
+
+    failing_store = MagicMock(spec=Chroma)
+    failing_store.similarity_search_with_score.side_effect = RuntimeError("falha")
+
+    stores = {
+        DocType.BULA: store_bula,
+        DocType.PROTOCOLO: failing_store,
+    }
+
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("hipertensão", stores, settings_loose)
+
+    assert len(docs) > 0
+    assert all(isinstance(d, Document) for d in docs)
+    assert all(d.metadata.get("doc_type") == "bula" for d in docs)
+
+    record = _retrieve_record(caplog)
+    assert record is not None
+    message = record.getMessage()
+    assert "failed_stores=['protocolo']" in message
+    assert f"chunks={len(docs)}" in message
+    assert "latency_ms=" in message
+
+
+def test_retrieve_all_stores_fail_logs_error_and_returns_empty(caplog, settings):
+    """Todos os stores falhando: retorna vazio e loga erro com failed_stores.
+
+    Quando nenhum store responde, ``retrieve`` não pode devolver contexto e
+    trata como cold start: retorna lista vazia, loga ``logger.error`` com o
+    nome dos stores que falharam e o record consolidado com ``failed_stores``,
+    ``latency_ms`` e ``chunks=0``.
+    """
+    from medasist.retrieval.retriever import retrieve
+
+    failing_store = MagicMock(spec=Chroma)
+    failing_store.similarity_search_with_score.side_effect = RuntimeError("falha")
+
+    stores = {DocType.MANUAL: failing_store}
+
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("qualquer consulta", stores, settings)
+
+    assert docs == []
+    assert any(
+        r.levelno == logging.ERROR
+        and "Nenhum resultado: falha de infra" in r.getMessage()
+        for r in caplog.records
+    )
+    record = _retrieve_record(caplog)
+    assert record is not None
+    message = record.getMessage()
+    assert "failed_stores=['manual']" in message
+    assert "chunks=0" in message
+    assert "latency_ms=" in message
