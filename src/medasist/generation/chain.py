@@ -18,7 +18,7 @@ from medasist.generation.citations import (
 from medasist.generation.prompts import PromptRegistry
 from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile, get_profile_config
-from medasist.retrieval.retriever import build_retriever
+from medasist.retrieval.retriever import build_retriever, select_collections
 
 logger = logging.getLogger(__name__)
 
@@ -108,11 +108,8 @@ def run_query(
     if settings is None:
         settings = get_settings()
 
-    if doc_types:
-        subset = {dt: stores[dt] for dt in doc_types if dt in stores}
-        retriever = build_retriever(subset, settings)
-    else:
-        retriever = build_retriever(stores, settings)
+    subset = select_collections(stores, doc_types)
+    retriever = build_retriever(subset, settings)
     docs: list[Document] = retriever.invoke(question)
 
     # --- Cold start guard (regra de segurança médica inegociável) ---

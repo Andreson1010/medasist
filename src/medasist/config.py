@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -119,6 +119,17 @@ class Settings(BaseSettings):
         Temperatura do LLM para o perfil PACIENTE (padrão: 0.3).
     paciente_max_tokens : int
         Máximo de tokens gerados para o perfil PACIENTE (padrão: 512).
+    eval_golden_set_path : Path
+        Caminho do golden set de avaliação RAG
+        (padrão: ``evals/dataset/golden_set.json``).
+    eval_llm_model : str
+        Modelo LLM usado como judge na avaliação; vazio resolve para
+        ``lm_studio_llm_model``.
+    eval_embedding_model : str
+        Modelo de embeddings usado na avaliação; vazio resolve para
+        ``lm_studio_embedding_model``.
+    eval_batch_size : int
+        Tamanho do lote nas chamadas de avaliação RAGAS (padrão: 16).
     """
 
     model_config = SettingsConfigDict(
@@ -224,6 +235,30 @@ class Settings(BaseSettings):
     # Retrieval
     retrieval_top_k: int = Field(default=10)
     retrieval_score_threshold: float = Field(default=0.4)
+
+    # Avaliação RAG (offline)
+    eval_golden_set_path: Path = Field(default=Path("evals/dataset/golden_set.json"))
+    eval_llm_model: str = Field(default="")
+    eval_embedding_model: str = Field(default="")
+    eval_batch_size: int = Field(default=16, gt=0)
+
+    @model_validator(mode="after")
+    def _resolve_eval_models(self) -> Settings:
+        """Resolve modelos de avaliação vazios para os modelos principais.
+
+        Mantém o default vazio para que a resolução acompanhe ``lm_studio_llm_model``
+        e ``lm_studio_embedding_model`` (sem duplicar o valor do modelo no código).
+
+        Returns
+        -------
+        Settings
+            Instância com ``eval_llm_model``/``eval_embedding_model`` preenchidos.
+        """
+        if not self.eval_llm_model:
+            self.eval_llm_model = self.lm_studio_llm_model
+        if not self.eval_embedding_model:
+            self.eval_embedding_model = self.lm_studio_embedding_model
+        return self
 
     # Chunking — bulas
     chunk_size_bula: int = Field(default=600)

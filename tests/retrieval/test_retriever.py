@@ -85,6 +85,63 @@ def empty_stores(client, embeddings, settings):
 
 
 # ---------------------------------------------------------------------------
+# Testes — select_collections (subset compartilhado com o run_query)
+# ---------------------------------------------------------------------------
+
+
+def _mock_stores() -> dict[DocType, MagicMock]:
+    return {
+        dt: MagicMock(name=f"store_{dt.value}")
+        for dt in (DocType.BULA, DocType.DIRETRIZ, DocType.PROTOCOLO)
+    }
+
+
+def test_select_collections_doc_types_filters_and_ignores_missing():
+    """select_collections com doc_types retorna só os presentes e ignora ausentes."""
+    from medasist.retrieval.retriever import select_collections
+
+    stores = _mock_stores()
+    subset = select_collections(stores, [DocType.BULA, DocType.MANUAL])
+
+    assert set(subset) == {DocType.BULA}
+    assert subset[DocType.BULA] is stores[DocType.BULA]
+
+
+def test_select_collections_none_returns_all_stores():
+    """select_collections com None retorna o próprio dicionário de stores."""
+    from medasist.retrieval.retriever import select_collections
+
+    stores = _mock_stores()
+    subset = select_collections(stores, None)
+
+    assert subset is stores
+    assert set(subset) == set(stores)
+
+
+def test_select_collections_empty_list_returns_all_stores():
+    """select_collections com lista vazia equivale a None (todas as stores)."""
+    from medasist.retrieval.retriever import select_collections
+
+    stores = _mock_stores()
+    subset = select_collections(stores, [])
+
+    assert subset is stores
+
+
+def test_select_collections_does_not_mutate_original():
+    """select_collections nunca muta o dicionário original de stores."""
+    from medasist.retrieval.retriever import select_collections
+
+    stores = _mock_stores()
+    original = dict(stores)
+
+    select_collections(stores, [DocType.BULA])
+    select_collections(stores, None)
+
+    assert set(stores) == set(original)
+
+
+# ---------------------------------------------------------------------------
 # Testes — build_retriever
 # ---------------------------------------------------------------------------
 

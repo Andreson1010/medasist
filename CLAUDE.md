@@ -35,6 +35,10 @@ pytest tests/ingestion/test_chunker.py::test_chunk_bula_respects_sections -v
 # Ingestão de documentos
 python scripts/ingest_docs.py --dir data/raw/
 
+# Avaliação RAG (offline, requer LM Studio + coleções populadas)
+python scripts/evaluate_rag.py --dataset evals/dataset/golden_set.json
+python scripts/evaluate_rag.py --n 3 --top-k 5 --doc-types bula diretriz
+
 # Subir ambiente local (API + UI)
 cp .env.example .env  # preencher LM_STUDIO_BASE_URL/modelos no .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
@@ -64,6 +68,8 @@ UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + LM St
 **`src/medasist/generation/`** — `chain.py` monta a chain LCEL `retriever | prompt | ChatOpenAI (LM Studio) | parser`. `prompts.py` contém um `PromptRegistry` com template por `UserProfile`. `citations.py` valida que todo `[N]` no texto tem `CitationItem` correspondente; referências órfãs são removidas.
 
 **`src/medasist/profiles/schemas.py`** — enum `UserProfile` (`MEDICO`, `ENFERMEIRO`, `ASSISTENTE`, `PACIENTE`) e `ProfileConfig` com `temperature`, `max_tokens`, `prompt_template`. Temperaturas: médico → 0.1, enfermeiro → 0.15, assistente → 0.2, paciente → 0.3.
+
+**`src/medasist/evaluation/`** — avaliação offline do RAG via RAGAS: `dataset.py` valida o golden set (`evals/dataset/golden_set.json`) e `metrics.py` executa `evaluate_golden_set` (retrieve + run_query por pergunta, 4 métricas sobre o subconjunto não-cold-start: ContextPrecision/ContextRecall e Faithfulness/AnswerRelevancy). Nunca passa pela API HTTP.
 
 **`src/medasist/api/`** — FastAPI com lifespan que aquece todas as chains no startup. `POST /query` recebe `QueryRequest(question, profile, doc_types?)` e retorna `QueryResponse(answer, citations, profile, disclaimer)`. `POST /ingest` requer header `X-Admin-Key`. Rate limiting via `slowapi`.
 

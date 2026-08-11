@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -93,4 +95,66 @@ class TestSettingsHealthcheckTimeout:
             Settings(
                 admin_api_key=SecretStr("very-strong-key-0123456789"),
                 healthcheck_timeout=0,
+            )
+
+
+class TestSettingsEvaluation:
+    def test_defaults_are_set(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.eval_golden_set_path == Path("evals/dataset/golden_set.json")
+        assert settings.eval_llm_model == settings.lm_studio_llm_model
+        assert settings.eval_embedding_model == settings.lm_studio_embedding_model
+        assert settings.eval_batch_size == 16
+
+    def test_empty_eval_llm_model_resolves_to_lm_studio_model(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            lm_studio_llm_model="phi-3-mini",
+            eval_llm_model="",
+        )
+        assert settings.eval_llm_model == "phi-3-mini"
+
+    def test_empty_eval_embedding_model_resolves_to_lm_studio_model(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            lm_studio_embedding_model="nomic-embed-text",
+            eval_embedding_model="",
+        )
+        assert settings.eval_embedding_model == "nomic-embed-text"
+
+    def test_non_empty_eval_models_are_respected(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            eval_llm_model="judge-mini",
+            eval_embedding_model="judge-embed",
+        )
+        assert settings.eval_llm_model == "judge-mini"
+        assert settings.eval_embedding_model == "judge-embed"
+
+    def test_custom_eval_golden_set_path_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            eval_golden_set_path=Path("evals/custom/golden.json"),
+        )
+        assert settings.eval_golden_set_path == Path("evals/custom/golden.json")
+
+    def test_custom_eval_batch_size_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            eval_batch_size=4,
+        )
+        assert settings.eval_batch_size == 4
+
+    def test_zero_eval_batch_size_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                eval_batch_size=0,
+            )
+
+    def test_negative_eval_batch_size_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                eval_batch_size=-1,
             )

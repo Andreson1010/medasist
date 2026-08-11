@@ -18,6 +18,9 @@ data/processed/
 chroma_db/
 logs/
 
+# Relatórios de avaliação RAG (não versionados)
+evals/results/
+
 # IDEs
 .vscode/
 .idea/
