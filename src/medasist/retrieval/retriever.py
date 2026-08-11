@@ -55,6 +55,35 @@ class _MultiStoreRetriever(BaseRetriever):
 # ---------------------------------------------------------------------------
 
 
+def select_collections(
+    stores: dict[DocType, Any],
+    doc_types: list[DocType] | None,
+) -> dict[DocType, Any]:
+    """Seleciona o subconjunto de stores consultado para os ``doc_types`` dados.
+
+    Quando ``doc_types`` é fornecido (lista não vazia), apenas as coleções
+    correspondentes são selecionadas — coleções ausentes em ``stores`` são
+    ignoradas; caso contrário, retorna todas as stores. Nunca muta ``stores``.
+    Regra compartilhada com ``run_query`` para que retrieval e geração usem
+    exatamente as mesmas coleções.
+
+    Parameters
+    ----------
+    stores : dict[DocType, Any]
+        Mapeamento DocType → vectorstore disponíveis.
+    doc_types : list[DocType] | None
+        Tipos de documento desejados (``None`` ou lista vazia = todos).
+
+    Returns
+    -------
+    dict[DocType, Any]
+        Subconjunto de stores a consultar (o próprio ``stores`` quando todos).
+    """
+    if doc_types:
+        return {dt: stores[dt] for dt in doc_types if dt in stores}
+    return stores
+
+
 def build_retriever(
     stores: dict[DocType, Chroma],
     settings: Settings,
