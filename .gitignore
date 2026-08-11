@@ -28,7 +28,11 @@ evals/results/
 
 # Projeto local (não versionado)
 .claude/
+.agents/
 todo/
 docs/adr/
 .req-hash
 docs/
+data-gym-cache/
+.playwright-mcp/
+.ruff_cache/
