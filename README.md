@@ -115,6 +115,9 @@ pytest tests/ingestion/test_chunker.py::test_chunk_bula_respects_sections -v
 # Ingerir documentos (coloque PDFs em data/raw/)
 python scripts/ingest_docs.py --dir data/raw/
 
+# Avaliação RAG (offline)
+python scripts/evaluate_rag.py --dataset evals/dataset/golden_set.json
+
 # Subir API + UI
 uvicorn src.medasist.api.main:app --reload  # API
 streamlit run src/medasist/ui/app.py        # UI (outro terminal)
@@ -146,6 +149,21 @@ Cada tipo usa uma estratégia de chunking própria (separadores e tamanhos confi
 | `ENFERMEIRO` | 0.15 | 1024 | Técnica / assistencial |
 | `ASSISTENTE` | 0.2 | 512 | Administrativa |
 | `PACIENTE` | 0.3 | 512 | Simples / acessível |
+
+---
+
+## Avaliação RAG (offline)
+
+Avaliação de qualidade do pipeline com [RAGAS 0.2.15](https://github.com/explodinggradients/ragas) sobre um golden set 100% sintético (`evals/dataset/golden_set.json` — medicamentos fictícios, sem dados reais).
+
+```bash
+python scripts/evaluate_rag.py --dataset evals/dataset/golden_set.json
+```
+
+- **Offline**: sem API HTTP e sem nuvem — LLM e embeddings apontam para o LM Studio local (`EVAL_LLM_MODEL`/`EVAL_EMBEDDING_MODEL`).
+- **4 métricas**: Context Precision e Context Recall (retrieval, todas as perguntas) + Faithfulness e Answer Relevancy (geração, excluindo cold starts).
+- **Pré-requisitos**: LM Studio disponível e coleções ChromaDB populadas (fail-fast com código de saída `1`).
+- Relatório JSON opcional com `--output evals/results/report.json` (não versionado).
 
 ---
 
