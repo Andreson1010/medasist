@@ -5,7 +5,7 @@
 **Story aprovada:** Checkpoint 1 (2026-08-11) — ver STATE.story.
 **Decisiones das perguntas em aberto (aprovadas):**
 1. Um arquivo por entry point: `api.log` e `ui.log` dentro de `LOG_DIR`.
-2. Campo fixo `app` presente (valor `medassist`); sem `environment`.
+2. Campo fixo `app` presente (valor por entry point: `api` ou `ui` — mais granular que `medassist`, permite filtrar a origem no agregador); sem `environment`.
 3. Registro de retrieval **consolidado por query** (um único JSON por query com a lista de scores), não por store.
 4. `doc_types` filtrado do `QueryRequest` é refletido no log.
 5. UI respeita `LOG_LEVEL` (mesmo mecanismo da API, sem nível fixo).

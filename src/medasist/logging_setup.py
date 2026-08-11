@@ -43,6 +43,8 @@ def configure_logging(settings: Any, app_name: str) -> Path:
     ``StreamHandler`` (texto simples) no nível de ``settings.log_level``.
     Idempotente por ``app_name`` e thread-safe: chamadas repetidas (ex:
     re-execução do script da UI a cada interação) não duplicam handlers.
+    Handlers são instalados sob lock; a flag de configurado só é setada
+    após sucesso — falha em ``mkdir``/``FileHandler`` permite retry.
 
     Parameters
     ----------
@@ -59,45 +61,47 @@ def configure_logging(settings: Any, app_name: str) -> Path:
     with _lock:
         if _configured_apps.get(app_name):
             return settings.log_dir / f"{app_name}.log"
+
+        log_dir = settings.log_dir
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"{app_name}.log"
+        level = getattr(logging, settings.log_level)
+
+        root = logging.getLogger()
+        root.setLevel(level)
+
+        _remove_previous_handlers(root, app_name)
+
+        json_handler = logging.FileHandler(log_file, encoding="utf-8")
+        json_handler.setLevel(level)
+        json_handler.set_name(f"{_HANDLER_NAME_PREFIX}json-{app_name}")
+        json_handler.setFormatter(
+            JsonFormatter(
+                "%(asctime)s %(levelname)s %(name)s %(message)s %(app)s",
+                rename_fields={"name": "logger"},
+                json_ensure_ascii=False,
+                json_default=str,
+            )
+        )
+        json_handler.addFilter(_AppNameFilter(app_name))
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(level)
+        stream_handler.set_name(f"{_HANDLER_NAME_PREFIX}stream-{app_name}")
+        stream_handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+
+        root.addHandler(json_handler)
+        root.addHandler(stream_handler)
+        # Flag só após handlers instalados: se mkdir/FileHandler falhar,
+        # a próxima chamada pode tentar de novo (ex: volume Docker não-gravável).
         _configured_apps[app_name] = True
 
-    log_dir = settings.log_dir
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / f"{app_name}.log"
-    level = getattr(logging, settings.log_level)
-
-    root = logging.getLogger()
-    root.setLevel(level)
-
-    _remove_previous_handlers(root, app_name)
-
-    json_handler = logging.FileHandler(log_file, encoding="utf-8")
-    json_handler.setLevel(level)
-    json_handler.set_name(f"{_HANDLER_NAME_PREFIX}json-{app_name}")
-    json_handler.setFormatter(
-        JsonFormatter(
-            "%(asctime)s %(levelname)s %(name)s %(message)s %(app)s",
-            rename_fields={"name": "logger"},
-            json_ensure_ascii=False,
-            json_default=str,
+        logger.info(
+            "Logging estruturado configurado para app='%s' em %s", app_name, log_file
         )
-    )
-    json_handler.addFilter(_AppNameFilter(app_name))
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(level)
-    stream_handler.set_name(f"{_HANDLER_NAME_PREFIX}stream-{app_name}")
-    stream_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-    )
-
-    root.addHandler(json_handler)
-    root.addHandler(stream_handler)
-
-    logger.info(
-        "Logging estruturado configurado para app='%s' em %s", app_name, log_file
-    )
-    return log_file
+        return log_file
 
 
 def _remove_previous_handlers(root: logging.Logger, app_name: str) -> None:

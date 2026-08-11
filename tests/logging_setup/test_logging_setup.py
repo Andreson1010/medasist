@@ -4,8 +4,10 @@ import json
 import logging
 from pathlib import Path
 
+import pytest
+
 from medasist.config import Settings
-from medasist.logging_setup import configure_logging
+from medasist.logging_setup import _configured_apps, configure_logging
 
 _ADMIN_KEY = "test-admin-key-0123456789"
 
@@ -114,6 +116,32 @@ class TestConfigureLoggingLevel:
         messages = [r["message"] for r in _log_records(tmp_path / "logs" / "api.log")]
         assert "deve aparecer no arquivo" in messages
         assert "deve ser filtrado" not in messages
+
+
+class TestConfigureLoggingFailureRetry:
+    def test_file_handler_failure_does_not_mark_configured(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Falha ao criar FileHandler não deixa a flag True (permite retry)."""
+        settings = _strong_settings(tmp_path / "logs")
+
+        def _boom(*_args, **_kwargs):
+            raise OSError("Permission denied: volume ./logs não-gravável")
+
+        monkeypatch.setattr(logging, "FileHandler", _boom)
+
+        with pytest.raises(OSError, match="Permission denied"):
+            configure_logging(settings, "api")
+
+        assert not _configured_apps.get("api")
+        assert _medasist_handlers(logging.getLogger()) == []
+
+        monkeypatch.undo()
+
+        log_file = configure_logging(settings, "api")
+
+        assert log_file.exists()
+        assert _configured_apps.get("api") is True
 
 
 def _medasist_handlers(root: logging.Logger) -> list[logging.Handler]:
