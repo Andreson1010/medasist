@@ -1,6 +1,7 @@
 # Python Rules — MedAssist
 
 Stack: Python 3.11 | FastAPI | LangChain LCEL | ChromaDB | Streamlit
+Lint: ruff (E/W/F/I/B/UP/C4/SIM) | Formato: black (line-length 88)
 
 ## Obrigatório em todo arquivo `.py`
 
