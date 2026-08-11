@@ -9,7 +9,12 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from medasist.api.health import check_chromadb, check_dependencies, check_lm_studio
+from medasist.api.health import (
+    _error_details,
+    check_chromadb,
+    check_dependencies,
+    check_lm_studio,
+)
 from medasist.api.schemas import DependencyHealth, DependencyStatus
 from medasist.config import Settings
 
@@ -110,7 +115,7 @@ class TestCheckChromaDB:
         client.list_collections.return_value = _all_collections(settings)
 
         with patch("medasist.api.health.get_client", return_value=client):
-            health = check_chromadb(settings, timeout=3.0)
+            health = check_chromadb(settings)
 
         assert health.status is DependencyStatus.OK
         assert isinstance(health.latency_ms, int)
@@ -123,7 +128,7 @@ class TestCheckChromaDB:
         ]
 
         with patch("medasist.api.health.get_client", return_value=client):
-            health = check_chromadb(settings, timeout=3.0)
+            health = check_chromadb(settings)
 
         assert health.status is DependencyStatus.DEGRADED
         assert "coleções ausentes" in health.details
@@ -136,7 +141,7 @@ class TestCheckChromaDB:
         client.list_collections.return_value = []
 
         with patch("medasist.api.health.get_client", return_value=client):
-            health = check_chromadb(settings, timeout=3.0)
+            health = check_chromadb(settings)
 
         assert health.status is DependencyStatus.DEGRADED
         assert health.details.count("coleções ausentes") == 1
@@ -146,7 +151,7 @@ class TestCheckChromaDB:
         client.heartbeat.side_effect = RuntimeError("conexão recusada")
 
         with patch("medasist.api.health.get_client", return_value=client):
-            health = check_chromadb(settings, timeout=3.0)
+            health = check_chromadb(settings)
 
         assert health.status is DependencyStatus.UNAVAILABLE
         assert "conexão recusada" in health.details
@@ -157,7 +162,7 @@ class TestCheckChromaDB:
         client.list_collections.side_effect = RuntimeError("lock perdido")
 
         with patch("medasist.api.health.get_client", return_value=client):
-            health = check_chromadb(settings, timeout=3.0)
+            health = check_chromadb(settings)
 
         assert health.status is DependencyStatus.UNAVAILABLE
         assert "lock perdido" in health.details
@@ -169,7 +174,7 @@ class TestCheckChromaDB:
         client = chromadb.PersistentClient(path=str(tmp_path / "chroma"))
 
         with patch("medasist.api.health.get_client", return_value=client):
-            health = check_chromadb(settings, timeout=3.0)
+            health = check_chromadb(settings)
 
         assert health.status is DependencyStatus.DEGRADED
         assert "coleções ausentes" in health.details
@@ -184,7 +189,7 @@ class TestCheckChromaDB:
             patch("medasist.api.health.get_client", return_value=client),
             caplog.at_level(logging.ERROR, logger="medasist.api.health"),
         ):
-            check_chromadb(settings, timeout=3.0)
+            check_chromadb(settings)
 
         assert any("ChromaDB inacessível" in r.getMessage() for r in caplog.records)
 
@@ -235,6 +240,20 @@ class TestCheckLMStudio:
         mock_get.assert_called_once_with(
             f"{settings.lm_studio_base_url}/models", timeout=2.5
         )
+
+
+class TestErrorDetails:
+    def test_returns_class_name_when_message_empty(self) -> None:
+        assert _error_details(Exception()) == "Exception"
+
+    def test_truncates_long_message_to_limit(self) -> None:
+        message = "erro " * 100
+        details = _error_details(RuntimeError(message))
+        assert len(details) == 200
+        assert details == (message[:200])
+
+    def test_returns_short_message_as_is(self) -> None:
+        assert _error_details(ValueError("conexão recusada")) == "conexão recusada"
 
 
 class TestCheckDependencies:
@@ -289,7 +308,9 @@ class TestCheckDependencies:
         assert result.chromadb.status is DependencyStatus.OK
         assert result.lm_studio.status is DependencyStatus.UNAVAILABLE
 
-    def test_passes_healthcheck_timeout_to_probes(self, settings: Settings) -> None:
+    def test_passes_healthcheck_timeout_to_lm_studio_probe(
+        self, settings: Settings
+    ) -> None:
         with (
             patch(
                 "medasist.api.health.check_chromadb",
@@ -302,5 +323,5 @@ class TestCheckDependencies:
         ):
             check_dependencies(settings)
 
-        mock_chromadb.assert_called_once_with(settings, settings.healthcheck_timeout)
+        mock_chromadb.assert_called_once_with(settings)
         mock_lm.assert_called_once_with(settings, settings.healthcheck_timeout)

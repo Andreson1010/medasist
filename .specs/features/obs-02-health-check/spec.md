@@ -5,7 +5,7 @@
 **Story aprovada:** Checkpoint 1 (2026-08-11).
 **Decisões das perguntas em aberto (aprovadas):**
 1. HTTP **sempre 200**; degradação sinalizada via `status` top-level `"degraded"` (preserva `curl -f` do docker-compose, `test_health`, `check_health`).
-2. Nova setting `healthcheck_timeout` com default **3s** por probe.
+2. Nova setting `healthcheck_timeout` com default **3s**, aplicada ao probe do LM Studio (único com timeout próprio; o cliente ChromaDB local é in-process, sem bound).
 3. Probe do LM Studio: **`GET {base_url}/models`** (liveness barato); embedding fica para diagnóstico manual.
 4. Expor `latency_ms` por dependência no `details`.
 5. Semântica: `unavailable` = inacessível; `degraded` = parcialmente funcional (ex: coleções ausentes); top-level apenas `ok`/`degraded`.
@@ -51,7 +51,7 @@ class HealthResponse(BaseModel):
 ### `src/medasist/api/health.py`
 
 ```python
-def check_chromadb(settings, timeout) -> DependencyHealth
+def check_chromadb(settings) -> DependencyHealth
 def check_lm_studio(settings, timeout) -> DependencyHealth
 def check_dependencies(settings) -> HealthResponse
 ```
@@ -59,7 +59,7 @@ def check_dependencies(settings) -> HealthResponse
 - **`check_chromadb`**: `client = get_client(settings)`; mede `time.perf_counter()`; `client.heartbeat()` (liveness) → `ok`; se ok, `client.list_collections()` e compara nomes com as 4 coleções esperadas (`settings.collection_*`) → se faltar coleção, `degraded` com detalhe das ausentes; qualquer exceção → `unavailable` com mensagem do erro (via `str(exc)`, truncada). Log de falha com `logger` + `%s`. O singleton `get_client` não é "envenenado": heartbeat não muta estado.
 - **`check_lm_studio`**: `httpx.get(f"{settings.lm_studio_base_url}/models", timeout=timeout)` → 2xx = `ok`; timeout = `unavailable` (details "timeout"); outra exceção de conexão = `unavailable`; status não-2xx = `unavailable` (details com código HTTP). Log de falha com `%s`.
 - **`check_dependencies`**: roda os dois probes (sequencial), soma `latency_ms` de cada, e monta `HealthResponse` com `status = "ok" if both ok else "degraded"`.
-- Timeout: `settings.healthcheck_timeout` (float, `gt=0`, default `3.0`).
+- Timeout: `settings.healthcheck_timeout` (float, `gt=0`, default `3.0`) limita o probe do LM Studio; o cliente ChromaDB persistente local (in-process) não expõe timeout próprio em `heartbeat`/`list_collections` — tradeoff aceito para dev local.
 - `from __future__ import annotations`, `pathlib` desnecessário, `logging`, `time`, `httpx`, `Any`.
 
 ### Route handler (`api/main.py`)
@@ -94,6 +94,7 @@ def health() -> HealthResponse:
 - Liveness: `client.heartbeat()` → int (ns); exceção → `unavailable`.
 - Riqueza: `client.list_collections()` → nomes; `expected = {settings.collection_bulas, ..., collection_manuais}`; se `expected - atual` não vazio → `degraded` (details: "coleções ausentes: X, Y"); senão `ok`.
 - Latência: ms do heartbeat + list_collections.
+- Timeout: o cliente persistente local (in-process) não expõe timeout próprio — `heartbeat`/`list_collections` não são limitados por `healthcheck_timeout`. Tradeoff aceito para dev local (apenas o probe do LM Studio é limitado).
 
 ### LM Studio
 - `httpx.get(url + "/models", timeout=healthcheck_timeout)`; base_url já termina em `/v1` → `/v1/models` (compatível OpenAI).
@@ -109,7 +110,7 @@ def health() -> HealthResponse:
 | REQ-3 | CA-03 | LM Studio fora → HTTP 200 + `status:"degraded"` + `lm_studio.status:"unavailable"`; `chromadb` mantém `ok`. |
 | REQ-4 | CA-04 | `heartbeat()` falha → `chromadb.status:"unavailable"`, erro logado (`%s`, sem traceback ao cliente). |
 | REQ-5 | CA-05 | `GET /models` timeout/não-2xx → `lm_studio.status:"unavailable"` com detalhe (timeout/código). |
-| REQ-6 | CA-06 | Novo `Settings.healthcheck_timeout` (float, `gt=0`, default 3.0) aplicado a cada probe. |
+| REQ-6 | CA-06 | Novo `Settings.healthcheck_timeout` (float, `gt=0`, default 3.0) aplicado ao probe do LM Studio (único com timeout próprio; ChromaDB local in-process sem bound — tradeoff documentado em "Detalhe dos probes"). |
 | REQ-7 | CA-07 | `status` top-level restrito a `ok`/`degraded`; UI `check_health` inalterada. |
 | REQ-8 | Edge | `list_collections()` ausente/falha → `chromadb.status:"degraded"` (alive, coleções ausentes). |
 | REQ-9 | Edge | Timeout: probe lança `TimeoutException` → `unavailable` com detalhe "timeout". |
@@ -122,7 +123,7 @@ def health() -> HealthResponse:
 | Risco | Nível | Mitigação |
 |---|---|---|
 | Quebra do `test_health.py` existente (exact dict) | Baixo | Atualizar o teste para o novo shape; healthcheck docker/UI só checam status/200. |
-| `/health` travar por dep travada | Médio | `healthcheck_timeout` (3s) por probe; endpoint nunca excede ~6s. |
+| `/health` travar por dep travada | Médio | Apenas o probe do LM Studio é limitado por `healthcheck_timeout` (3s); o cliente ChromaDB persistente local roda in-process e `heartbeat`/`list_collections` não têm bound — tradeoff aceito para dev local (endpoint nunca excede ~3s + tempo do probe ChromaDB local). |
 | Singleton `get_client` compartilhado | Baixo | Probes usam o client existente sem mutar estado; exceção não persiste. |
 | Dependência de `httpx` no health module | Baixo | `httpx` já é dependência (usada em `ui/client.py`). |
 | `GET /models` requer LM Studio com rota compatível | Baixo | LM Studio expõe `/v1/models` (padrão OpenAI); documentado no `.env.example`. |

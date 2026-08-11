@@ -22,7 +22,8 @@ Cobertura por critério de aceitação:
 - CA-06: ``healthcheck_timeout`` é respeitado (timeout repassado ao
   ``httpx.get``; endpoint responde dentro de tempo razoável).
 - CA-07: ``status`` top-level restrito a ``"ok"``/``"degraded"`` em ambos os
-  cenários (compatibilidade com ``ui/client.py`` `check_health`).
+  cenários; HTTP 200 (mesmo com ``"degraded"``) mantém a UI no ar
+  (``ui/client.py`` `check_health`/`get_health`).
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ from fastapi.testclient import TestClient
 from medasist.api.schemas import HealthResponse
 from medasist.config import Settings
 from medasist.profiles.schemas import UserProfile
+from medasist.ui.client import check_health, get_health
 
 logger = logging.getLogger(__name__)
 
@@ -323,3 +325,35 @@ class TestHealthCheckAcceptance:
             assert response.json()["status"] in {"ok", "degraded"}
         assert ok_response.json()["status"] == "ok"
         assert degraded_response.json()["status"] == "degraded"
+
+    def test_CA07_ui_treats_degraded_http_200_as_api_up(self) -> None:
+        """CA-07 UI-compat: /health degraded (HTTP 200) não derruba a UI."""
+        settings = _settings()
+        with (
+            _client(settings) as c,
+            patch(
+                "medasist.api.health.get_client",
+                return_value=_broken_chroma(),
+            ),
+            patch(
+                "medasist.api.health.httpx.get",
+                side_effect=httpx.ConnectError("fora do ar"),
+            ),
+        ):
+            response = c.get("/health")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "degraded"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = body
+        mock_instance = MagicMock()
+        mock_instance.get.return_value = mock_response
+        mock_cls = MagicMock()
+        mock_cls.return_value.__enter__.return_value = mock_instance
+        mock_cls.return_value.__exit__.return_value = False
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            assert get_health("http://ui-test") == body
+            assert check_health("http://ui-test") is True
