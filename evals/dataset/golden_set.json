@@ -1,0 +1,104 @@
+{
+  "version": "1.0.0",
+  "description": "Golden set sintético para avaliação offline do RAG do MedAssist. Contém apenas medicamentos, diretrizes e protocolos fictícios — nenhum dado real de paciente, instituição ou medicamento.",
+  "questions": [
+    {
+      "question": "Qual a dose inicial recomendada de Alphazol para adultos com hipertensão arterial sistêmica?",
+      "reference_answer": "A dose inicial recomendada de Alphazol é 10 mg/dia, administrada por via oral, com ajuste conforme resposta clínica.",
+      "reference_contexts": [
+        "Alphazol X: dose inicial de 10 mg/dia para hipertensão arterial sistêmica em adultos."
+      ],
+      "doc_types": ["bula"],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Zolatril é contraindicado em quais condições?",
+      "reference_answer": "Zolatril é contraindicado em gestantes, pacientes com insuficiência hepática grave e hipersensibilidade ao princípio ativo.",
+      "reference_contexts": [
+        "Zolatril: contraindicado em gestantes, insuficiência hepática grave e hipersensibilidade ao princípio ativo."
+      ],
+      "doc_types": ["bula"],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Qual a posologia de Betanorm no tratamento de ansiedade generalizada?",
+      "reference_answer": "A posologia de Betanorm é de 5 mg, duas vezes ao dia, com duração máxima de 8 semanas.",
+      "reference_contexts": [
+        "Betanorm: 5 mg, duas vezes ao dia, para transtorno de ansiedade generalizada, máximo de 8 semanas."
+      ],
+      "doc_types": ["bula"],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Ceflunex pode ser usado em crianças menores de 2 anos?",
+      "reference_answer": "Não. Ceflunex é contraindicado em crianças menores de 2 anos por risco aumentado de reações adversas.",
+      "reference_contexts": [
+        "Ceflunex: contraindicado em menores de 2 anos."
+      ],
+      "doc_types": ["bula"],
+      "profile": "enfermeiro",
+      "is_cold_start": false
+    },
+    {
+      "question": "Quais são os principais efeitos adversos da Alphazol?",
+      "reference_answer": "Os principais efeitos adversos de Alphazol são tontura, cefaleia e edema periférico.",
+      "reference_contexts": [
+        "Alphazol X: efeitos adversos comuns incluem tontura, cefaleia e edema periférico."
+      ],
+      "doc_types": ["bula"],
+      "profile": "paciente",
+      "is_cold_start": false
+    },
+    {
+      "question": "Como o protocolo institucional recomenda manejar cefaleia tensional no pronto-atendimento?",
+      "reference_answer": "O protocolo recomenda analgesia de primeira linha com dipirona ou paracetamol, reavaliação em 60 minutos e encaminhamento se sinais de alerta.",
+      "reference_contexts": [
+        "Protocolo de cefaleia tensional: analgesia de primeira linha, reavaliação em 60 min, encaminhamento se sinais de alerta."
+      ],
+      "doc_types": ["protocolo"],
+      "profile": "enfermeiro",
+      "is_cold_start": false
+    },
+    {
+      "question": "Qual a diretriz para acompanhamento ambulatorial do paciente com hipertensão controlada?",
+      "reference_answer": "A diretriz recomenda reavaliação clínica a cada 6 meses e monitoramento da pressão arterial com medida em consulta e medição domiciliar.",
+      "reference_contexts": [
+        "Diretriz de hipertensão: reavaliação clínica a cada 6 meses e monitoramento domiciliar da pressão arterial."
+      ],
+      "doc_types": ["diretriz"],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Quais os cuidados de enfermagem na administração de Zolatril?",
+      "reference_answer": "Os cuidados de enfermagem incluem verificar a última dose, monitorar função hepática, e orientar o paciente a não interromper o tratamento sem orientação.",
+      "reference_contexts": [
+        "Zolatril: cuidados de enfermagem — conferir dose, monitorar função hepática e orientar adesão."
+      ],
+      "doc_types": ["bula", "manual"],
+      "profile": "enfermeiro",
+      "is_cold_start": false
+    },
+    {
+      "question": "Qual o esquema de reavaliação recomendado para o paciente em uso contínuo de Betanorm?",
+      "reference_answer": "O manual recomenda reavaliação clínica mensal durante o uso de Betanorm, com avaliação de eficácia e efeitos adversos.",
+      "reference_contexts": [
+        "Manual de acompanhamento farmacológico: reavaliação mensal em uso contínuo de Betanorm."
+      ],
+      "doc_types": ["manual"],
+      "profile": "assistente",
+      "is_cold_start": false
+    },
+    {
+      "question": "Como tratar pneumonia fúngica em camaleões de estimação?",
+      "reference_answer": "O tema está fora do corpus; o sistema deve acionar o cold start e orientar a consulta a um profissional de saúde, sem gerar resposta.",
+      "reference_contexts": [],
+      "doc_types": [],
+      "profile": "medico",
+      "is_cold_start": true
+    }
+  ]
+}
