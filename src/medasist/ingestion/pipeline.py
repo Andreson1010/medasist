@@ -73,6 +73,8 @@ def build_embed_fn(settings: Settings) -> EmbedFn:
         api_key=settings.lm_studio_api_key.get_secret_value(),
         model=settings.lm_studio_embedding_model,
         check_embedding_ctx_length=False,
+        max_retries=settings.embedding_max_retries,
+        request_timeout=settings.embedding_request_timeout,
     )
     return embeddings.embed_documents
 

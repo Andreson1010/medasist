@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import chromadb
 import pytest
 from langchain_core.embeddings import Embeddings
 
 from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
-from medasist.vectorstore.store import get_all_vectorstores, get_vectorstore
+from medasist.vectorstore.store import (
+    build_embeddings,
+    get_all_vectorstores,
+    get_vectorstore,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers de teste
@@ -140,3 +146,26 @@ def test_get_all_vectorstores_each_store_is_queryable(client, embeddings, settin
         )
         results = store.similarity_search("texto sintético", k=1)
         assert len(results) == 1, f"Falha ao consultar store de {doc_type}"
+
+
+# ---------------------------------------------------------------------------
+# build_embeddings
+# ---------------------------------------------------------------------------
+
+
+def test_build_embeddings_passes_retry_and_timeout_from_settings(settings):
+    """OBS-04: retry/backoff e timeout do Settings chegam ao OpenAIEmbeddings."""
+    settings.embedding_max_retries = 3
+    settings.embedding_request_timeout = 20.0
+
+    with patch("medasist.vectorstore.store.OpenAIEmbeddings") as mock_emb_cls:
+        build_embeddings(settings)
+
+    mock_emb_cls.assert_called_once_with(
+        base_url=settings.lm_studio_base_url,
+        api_key=settings.lm_studio_api_key.get_secret_value(),
+        model=settings.lm_studio_embedding_model,
+        check_embedding_ctx_length=False,
+        max_retries=3,
+        request_timeout=20.0,
+    )

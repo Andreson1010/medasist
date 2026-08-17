@@ -83,6 +83,8 @@ def build_embeddings(settings: Settings) -> OpenAIEmbeddings:
         api_key=settings.lm_studio_api_key.get_secret_value(),
         model=settings.lm_studio_embedding_model,
         check_embedding_ctx_length=False,
+        max_retries=settings.embedding_max_retries,
+        request_timeout=settings.embedding_request_timeout,
     )
 
 

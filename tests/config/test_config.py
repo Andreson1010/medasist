@@ -158,3 +158,62 @@ class TestSettingsEvaluation:
                 admin_api_key=SecretStr("very-strong-key-0123456789"),
                 eval_batch_size=-1,
             )
+
+
+class TestSettingsRetryBackoff:
+    def test_defaults_are_set(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.llm_max_retries == 2
+        assert settings.llm_request_timeout == 60.0
+        assert settings.embedding_max_retries == 2
+        assert settings.embedding_request_timeout == 30.0
+
+    def test_custom_values_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            llm_max_retries=5,
+            llm_request_timeout=120.0,
+            embedding_max_retries=3,
+            embedding_request_timeout=15.0,
+        )
+        assert settings.llm_max_retries == 5
+        assert settings.llm_request_timeout == 120.0
+        assert settings.embedding_max_retries == 3
+        assert settings.embedding_request_timeout == 15.0
+
+    def test_zero_retries_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            llm_max_retries=0,
+            embedding_max_retries=0,
+        )
+        assert settings.llm_max_retries == 0
+        assert settings.embedding_max_retries == 0
+
+    def test_negative_llm_retries_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                llm_max_retries=-1,
+            )
+
+    def test_negative_embedding_retries_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                embedding_max_retries=-1,
+            )
+
+    def test_zero_llm_timeout_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                llm_request_timeout=0,
+            )
+
+    def test_zero_embedding_timeout_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                embedding_request_timeout=0,
+            )

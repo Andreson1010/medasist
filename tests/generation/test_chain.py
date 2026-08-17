@@ -36,6 +36,8 @@ def _make_settings(
     settings.lm_studio_llm_model = "phi-3-mini"
     settings.retrieval_top_k = 5
     settings.retrieval_score_threshold = 0.4
+    settings.llm_max_retries = 2
+    settings.llm_request_timeout = 60.0
     return settings
 
 
@@ -305,3 +307,36 @@ class TestRunQueryNormal:
         result = self._run_with_mock_llm(docs, "Veja [99] para mais detalhes.")
         assert result.is_cold_start is True
         assert result.citations == []
+
+    def test_chatopenai_receives_retry_and_timeout_from_settings(self) -> None:
+        """OBS-04: retry/backoff e timeout do Settings chegam ao ChatOpenAI."""
+        settings = _make_settings()
+        settings.llm_max_retries = 4
+        settings.llm_request_timeout = 90.0
+        settings.medico_temperature = 0.1
+        settings.medico_max_tokens = 1024
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = [_make_doc("texto relevante [1]")]
+            mock_rb.return_value = mock_retriever
+
+            mock_llm_instance = MagicMock()
+            mock_llm_cls.return_value = mock_llm_instance
+            mock_llm_instance.return_value = AIMessage(content="Resposta com [1].")
+
+            run_query("qual a dose?", stores, UserProfile.MEDICO, settings)
+
+        mock_llm_cls.assert_called_once_with(
+            base_url="http://localhost:1234/v1",
+            api_key="lm-studio",
+            model="phi-3-mini",
+            temperature=0.1,
+            max_tokens=1024,
+            max_retries=4,
+            request_timeout=90.0,
+        )
