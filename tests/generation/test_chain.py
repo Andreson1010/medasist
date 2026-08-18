@@ -308,6 +308,44 @@ class TestRunQueryNormal:
         assert result.is_cold_start is True
         assert result.citations == []
 
+    def test_rerank_enabled_contract_intact_and_citations_valid(self) -> None:
+        """RAG-01: com rerank habilitado, run_query mantém contrato e citações.
+
+        O rerank ocorre dentro do retriever (mockado aqui); o que importa para
+        a chain é que documentos rerankados (qualquer ordem) gerem citações [N]
+        mapeando para CitationItem válidos e resultado não-cold-start.
+        """
+        settings = _make_settings()
+        settings.retrieval_rerank_enabled = True
+        stores = MagicMock()
+
+        # docs em ordem rerankada (mais relevante primeiro)
+        docs = [
+            _make_doc("texto B", source="bula_b.pdf"),
+            _make_doc("texto A", source="bula_a.pdf"),
+        ]
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = docs
+            mock_rb.return_value = mock_retriever
+            mock_llm_instance = MagicMock()
+            mock_llm_cls.return_value = mock_llm_instance
+            mock_llm_instance.return_value = AIMessage(content="Recomendo [1] e [2].")
+
+            result = run_query("qual a dose?", stores, UserProfile.MEDICO, settings)
+
+        assert result.is_cold_start is False
+        assert len(result.citations) == 2
+        assert isinstance(result.citations[0], CitationItem)
+        assert isinstance(result.citations[1], CitationItem)
+        assert {c.index for c in result.citations} == {1, 2}
+        assert result.citations[0].source == "bula_b.pdf"
+        assert result.citations[1].source == "bula_a.pdf"
+
     def test_chatopenai_receives_retry_and_timeout_from_settings(self) -> None:
         """OBS-04: retry/backoff e timeout do Settings chegam ao ChatOpenAI."""
         settings = _make_settings()

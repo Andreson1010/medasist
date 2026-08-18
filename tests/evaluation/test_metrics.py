@@ -99,6 +99,48 @@ class TestBuildMetrics:
         }
 
 
+class TestReciprocalRank:
+    def _rr(self, contexts: list[str], reference: list[str]) -> float:
+        from medasist.evaluation.metrics import _reciprocal_rank
+
+        return _reciprocal_rank(contexts, reference)
+
+    def test_first_reference_hit_at_rank_one(self) -> None:
+        assert self._rr(["A", "B", "C"], ["A", "C"]) == pytest.approx(1.0)
+
+    def test_first_reference_hit_at_later_rank(self) -> None:
+        assert self._rr(["A", "B", "C"], ["C"]) == pytest.approx(1.0 / 3)
+
+    def test_zero_when_no_reference_hit(self) -> None:
+        assert self._rr(["A", "B", "C"], ["X", "Y"]) == 0.0
+
+    def test_zero_when_contexts_empty(self) -> None:
+        assert self._rr([], ["A"]) == 0.0
+
+    def test_uses_first_hit_position_not_count(self) -> None:
+        # 'B' aparece na posição 2 → 1/2, mesmo havendo vários hits depois
+        assert self._rr(["A", "B", "B"], ["B"]) == pytest.approx(0.5)
+
+
+class TestAggregateMrr:
+    def _agg(self, rows: list[dict], eval_indices: list[int]) -> float | None:
+        from medasist.evaluation.metrics import _aggregate_mrr
+
+        return _aggregate_mrr(rows, eval_indices)
+
+    def test_mean_over_non_cold_start_subset(self) -> None:
+        rows = [
+            {"contexts": ["A"], "reference_contexts": ["A"]},  # RR = 1.0
+            {"contexts": ["X"], "reference_contexts": ["A"]},  # RR = 0.0 (cold)
+            {"contexts": ["X", "B"], "reference_contexts": ["B"]},  # RR = 0.5
+        ]
+        # Subconjunto não-cold-start: índices 0 e 2 → média (1.0 + 0.5)/2
+        assert self._agg(rows, [0, 2]) == pytest.approx(0.75)
+
+    def test_returns_none_when_no_eval_indices(self) -> None:
+        assert self._agg([{"contexts": ["A"], "reference_contexts": ["A"]}], []) is None
+
+
 class TestEvaluateGoldenSet:
     def test_partitions_cold_start_and_reports_counts(self, mocker: MagicMock) -> None:
         from medasist.evaluation.metrics import evaluate_golden_set
@@ -150,6 +192,7 @@ class TestEvaluateGoldenSet:
         assert report.aggregates["context_recall"] == pytest.approx(0.6)
         assert report.aggregates["faithfulness"] == pytest.approx(0.85)
         assert report.aggregates["answer_relevancy"] == pytest.approx(0.65)
+        assert report.aggregates["mrr"] == pytest.approx(0.0)
         assert calls["column_map"] == {"reference": "reference_answer"}
         assert calls["batch_size"] == 8
 
@@ -162,6 +205,7 @@ class TestEvaluateGoldenSet:
         assert cold_row.metrics["context_recall"] is None
         assert cold_row.metrics["faithfulness"] is None
         assert cold_row.metrics["answer_relevancy"] is None
+        assert cold_row.metrics["mrr"] is None
 
         normal_row = report.per_question[0]
         assert normal_row.is_cold_start is False
@@ -169,6 +213,60 @@ class TestEvaluateGoldenSet:
         assert normal_row.metrics["context_recall"] == pytest.approx(0.8)
         assert normal_row.metrics["faithfulness"] == pytest.approx(0.9)
         assert normal_row.metrics["answer_relevancy"] == pytest.approx(0.7)
+
+    def test_mrr_present_in_aggregates_and_per_question(
+        self, mocker: MagicMock
+    ) -> None:
+        from medasist.evaluation.metrics import evaluate_golden_set
+
+        mocker.patch(
+            "medasist.evaluation.metrics.retrieve",
+            side_effect=lambda query, stores, settings: (
+                _documents("ctx-A") if query == "Q1" else _documents("ctx-X")
+            ),
+        )
+        mocker.patch(
+            "medasist.evaluation.metrics.run_query",
+            side_effect=[
+                SimpleNamespace(answer="A1", is_cold_start=False),
+                SimpleNamespace(answer="A2", is_cold_start=False),
+            ],
+        )
+        mocker.patch(
+            "medasist.evaluation.metrics.evaluate",
+            side_effect=[
+                _eval_result(
+                    [
+                        {"context_precision": 1.0, "context_recall": 1.0},
+                        {"context_precision": 0.5, "context_recall": 0.5},
+                    ]
+                ),
+                _eval_result(
+                    [
+                        {"faithfulness": 1.0, "answer_relevancy": 1.0},
+                        {"faithfulness": 0.5, "answer_relevancy": 0.5},
+                    ]
+                ),
+            ],
+        )
+        questions = [
+            GoldenQuestion(
+                question="Q1",
+                reference_answer="R1",
+                reference_contexts=["ctx-A"],
+            ),
+            GoldenQuestion(
+                question="Q2",
+                reference_answer="R2",
+                reference_contexts=["ctx-B"],
+            ),
+        ]
+        report = evaluate_golden_set(questions, stores={}, settings=_settings())
+
+        # Q1: ctx-A no rank 1 → RR 1.0; Q2: ctx-B ausente → RR 0.0; média 0.5
+        assert report.aggregates["mrr"] == pytest.approx(0.5)
+        assert report.per_question[0].metrics["mrr"] == pytest.approx(1.0)
+        assert report.per_question[1].metrics["mrr"] == pytest.approx(0.0)
 
     def test_run_query_called_with_per_question_profile_and_doc_types(
         self, mocker: MagicMock
