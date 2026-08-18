@@ -1,0 +1,29 @@
+{
+  "skill_name": "rag-pipeline-audit",
+  "evals": [
+    {
+      "id": 0,
+      "name": "auditoria-completa",
+      "prompt": "dá uma auditada completa no RAG do medasist — quero saber onde tá perdendo qualidade e o que mexer primeiro, com prós e contras de custo",
+      "expected_output": "Relatório em docs/rag-audit-YYYY-MM-DD.md cobrindo os 12 estágios, métricas (ou plano de evals se LMStudio off), e recomendações priorizadas com os 4 critérios (desempenho/escalabilidade/confiabilidade/custo).",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 1,
+      "name": "diagnostico-por-camada",
+      "prompt": "tô achando que o retrieval tá trazendo chunk irrelevante e às vezes a resposta inventa coisa. consegue diagnosticar se é problema de chunking, embedding ou geração?",
+      "expected_output": "Diagnóstico que separa camada Retrieval (Context Precision/Recall, MRR, Hit Rate) de Generation (Faithfulness), mapeia o sintoma 'chunk irrelevante' e 'inventa coisa' às métricas certas, e recomenda conserto por camada com evidência.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "name": "chunking-focado",
+      "prompt": "o chunking atual é RecursiveCharacterTextSplitter com configs por DocType. vale trocar pra hierarchical por causa dos PDFs longos? me mostra o trade-off",
+      "expected_output": "Comparação RecursiveCharacterTextSplitter vs Hierarchical chunking com trade-offs concretos (qualidade/custo/migração), ancorada no estado atual do MedAssist, condicionando a recomendação a medir Context Precision/Recall (não chute), e custo de rebuild.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}

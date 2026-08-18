@@ -27,7 +27,7 @@ evals/results/
 *.swp
 
 # Projeto local (não versionado)
-.claude/
+_claude-code/
 .agents/
 todo/
 docs/adr/
@@ -35,4 +35,7 @@ docs/adr/
 docs/
 data-gym-cache/
 .playwright-mcp/
+.opencode/worktrees/
 .ruff_cache/
+
+
