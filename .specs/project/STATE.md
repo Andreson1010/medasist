@@ -1,7 +1,7 @@
 # State
 
-**Last Updated:** 2026-08-11
-**Current Work:** OBS-03 (avaliação RAG offline com RAGAS) concluído e mergeado (PR #20), seguindo AD-010 (`evals/`). OBS-01 (PR #18) e OBS-02 (PR #19) também concluídos. Próximo passo: M3 — OBS-04 retry/backoff para LM Studio
+**Last Updated:** 2026-08-18
+**Current Work:** OBS-04 (retry/backoff, PR #21) e RAG-04 (citações com página/seção + guarda lexical de fármacos, PR #22) concluídos e mergeados, fechando M3. Próximo passo: M4 — RAG-01 re-ranking ou RAG-02 hybrid search (denso + esparso)
 
 ---
 
@@ -69,6 +69,13 @@
 **Reason:** Não havia mecanismo para medir regressões de qualidade no RAG; alterações em retriever/prompts/dados passavam despercebidas. AD-010 já havia decidido adotar `evals/` para golden set + métricas.
 **Trade-off:** Judge = mesmo modelo que gera (phi-3-mini) — viés de autogratificação aceito e documentado; `--profile` CLI com default None respeita profile por pergunta do golden set; double-retrieval (retrieve + run_query) por pergunta aceito e documentado (GenerationResult não carrega contexts).
 **Impact:** 4 novas settings (`eval_golden_set_path`, `eval_llm_model`, `eval_embedding_model`, `eval_batch_size`), `.env.example`, `.gitignore` (`evals/results/`), docs, 4 arquivos de teste. 378 testes, 97.23% cobertura. PR #20.
+
+### AD-012: RAG-04 section/page nas citações + guarda lexical de fármacos (2026-08-18)
+
+**Decision:** Implementar RAG-04 (PR #22) em duas partes: (1) propagation de página/seção — chunking por página no `chunker.py` (TextChunk ganha `page`/`section`), detecção de títulos de seção por numeração hierárquica ou caixa alta, persistência no ChromaDB (página 0 como sentinela para `None`, que o ChromaDB rejeita) e exibição da página real na citação (sentinela 0 → vazio); (2) guarda lexical no retriever que trata como cold start consultas mencionando um fármaco (termo com sufixo de droga) cujo termo não aparece em nenhum chunk recuperado — impede o LLM de alucinar doses de outro medicamento com embeddings similares. Configs em `Settings`: `section_heading_min_len/max_len`, `retrieval_stopwords`, `retrieval_drug_suffixes`, `retrieval_drug_term_min_len`. Dev tooling: `make dev-local` (`scripts/run_local.ps1`) e `scripts/smoke_test.py`.
+**Reason:** Citações exibiam apenas a fonte, sem a seção/página prometidas no roadmap; e o retrieval podia recuperar chunks de outro fármaco por similaridade de embedding, levando o LLM a alucinar (risco médico). A guarda lexical corta isso com custo zero de LLM.
+**Trade-off:** Guarda tem falso-negativo esperado — mesmo fármaco com nomes distintos (paracetamol vs acetaminofeno) vira cold start (seguro, sem alucinação). Chunking por página perde overlap entre páginas. Heurística de seção aceita ruído (rodapés numéricos como `12 / 34`, cabeçalhos ALL-CAPS repetidos).
+**Impact:** `chunker.py`, `metadata.py`, `pipeline.py`, `citations.py`, `retriever.py`, `config.py`, `Makefile`, `scripts/run_local.ps1`, `scripts/smoke_test.py`, testes. 402 testes, 97.42% cobertura. PR #22. OBS-04 (retry/backoff) mergeado no mesmo dia (PR #21), fechando M3.
 
 ### AD-010: Manter estrutura de diretórios atual; adotar apenas `evals/` da estrutura optional (2026-08-11)
 
@@ -149,6 +156,8 @@ Nenhum blocker ativo.
 | 012 | OBS-01: logging estruturado JSON (PR #18) | 2026-08-11 | Done |
 | 013 | AD-010: manter estrutura atual + adotar evals/ (OBS-03) | 2026-08-11 | Done |
 | 014 | OBS-03: avaliação RAG offline com RAGAS (PR #20) | 2026-08-11 | Done |
+| 015 | OBS-04: retry/backoff para LM Studio (PR #21) | 2026-08-18 | Done |
+| 016 | RAG-04: citações com página/seção + guarda lexical (PR #22) | 2026-08-18 | Done |
 
 ---
 
@@ -170,6 +179,8 @@ Nenhum blocker ativo.
 - [x] FIX-05: Limite de upload no /ingest (AD-007) — PR #15 merged
 - [x] FIX-06: Admin key validation (AD-008) — PR #16 merged
 - [x] FIX-07: CORS middleware (AD-009) — PR #17 merged
+- [x] OBS-04: retry/backoff para LM Studio (AD-012) — PR #21 merged
+- [x] RAG-04: citações com página/seção + guarda lexical (AD-012) — PR #22 merged
 
 ---
 

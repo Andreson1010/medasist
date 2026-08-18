@@ -55,7 +55,7 @@
 ## M2 — Estabilização e Correções Críticas
 
 **Goal:** Corrigir bugs, gaps de segurança e divergências de documentação que impedem uso confiável.
-**Target:** Antes de qualquer nova feature
+**Target:** Concluído
 
 ### Features
 
@@ -92,25 +92,26 @@
 ## M3 — Observabilidade e Qualidade RAG
 
 **Goal:** Adicionar visibilidade e capacidade de medir qualidade do pipeline RAG.
+**Target:** Concluído
 
 ### Features
 
-**OBS-01: Configurar logging estruturado** - PLANNED
+**OBS-01: Configurar logging estruturado** - DONE
 - Wire `python-json-logger` nos entry points (API + UI)
 - Aplicar `LOG_LEVEL` e `LOG_DIR` do Settings
 - Logar retrieval (chunks + scores + latência) por query
 
-**OBS-02: Health check de dependências** - PLANNED
+**OBS-02: Health check de dependências** - DONE
 - `/health` verificar ChromaDB + LM Studio
 - Retornar status por dependência
 
-**OBS-03: Avaliação RAG (RAGAS)** - PLANNED
+**OBS-03: Avaliação RAG (RAGAS)** - DONE
 - Criar `scripts/evaluate_rag.py`
 - Implementar `src/medasist/evaluation/`
 - Golden set com perguntas sintéticas
 - Métricas: Context Precision, Recall, Faithfulness, Answer Relevancy
 
-**OBS-04: Retry/backoff para LM Studio** - PLANNED
+**OBS-04: Retry/backoff para LM Studio** - DONE
 - Adicionar retry com backoff exponencial nas chamadas ao LM Studio
 - Configurável via Settings
 
@@ -135,10 +136,11 @@
 - Reescrever/expandir queries curtas antes do retrieval
 - Decomposição de perguntas multi-parte
 
-**RAG-04: Section/page nas citações** - PLANNED
+**RAG-04: Section/page nas citações** - DONE
 - Propagar page_number do PageContent → TextChunk → ChunkMetadata
 - Extrair section headings do documento
 - Citação completa: `[N] doc — Seção: X, Pág. Y`
+- Bônus: guarda lexical anti-contaminação cruzada de fármacos no retriever
 
 ---
 
