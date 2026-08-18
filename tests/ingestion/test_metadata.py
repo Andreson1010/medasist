@@ -22,6 +22,8 @@ def _make_chunk(
     text: str = "Zolatril 250mg é indicado para infecções bacterianas sintéticas.",
     doc_type: DocType = DocType.BULA,
     chunk_index: int = 0,
+    page: int | None = None,
+    section: str = "",
 ) -> TextChunk:
     return TextChunk(
         text=text,
@@ -29,6 +31,8 @@ def _make_chunk(
         source_path=FAKE_PATH,
         sha256=FAKE_SHA,
         chunk_index=chunk_index,
+        page=page,
+        section=section,
     )
 
 
@@ -81,6 +85,23 @@ def test_build_metadata_all_doc_types():
         chunk = _make_chunk(doc_type=doc_type)
         result = build_metadata(chunk)
         assert result.doc_type == doc_type.value
+
+
+def test_build_metadata_page_and_section():
+    """build_metadata repassa página e seção do TextChunk."""
+    chunk = _make_chunk(page=2, section="POSOLOGIA")
+    result = build_metadata(chunk)
+
+    assert result.page == 2
+    assert result.section == "POSOLOGIA"
+
+
+def test_build_metadata_page_section_defaults():
+    """Sem página/seção no TextChunk, metadados usam os defaults."""
+    result = build_metadata(_make_chunk())
+
+    assert result.page is None
+    assert result.section == ""
 
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,10 @@ ingest:
 ingest-local:
 	python scripts/ingest_docs.py --dir data/raw --doc-type bula
 
+## Sobe API + UI localmente (sem Docker), gerenciando processos e logs
+dev-local:
+	powershell -ExecutionPolicy Bypass -File scripts/run_local.ps1
+
 ## Qualidade
 test:
 	pytest tests/ -v --cov=src --cov-fail-under=80

@@ -113,6 +113,18 @@ class Settings(BaseSettings):
         Número de chunks recuperados por consulta.
     retrieval_score_threshold : float
         Score mínimo de similaridade; abaixo disso aciona cold start.
+    retrieval_stopwords : tuple[str, ...]
+        Palavras ignoradas na verificação lexical de relevância do retrieval.
+    retrieval_drug_suffixes : tuple[str, ...]
+        Sufixos que indicam um termo com cara de medicamento na consulta,
+        usado pela guarda de contaminação cruzada entre documentos.
+    section_heading_min_len : int
+        Comprimento mínimo de uma linha para ser candidata a título de seção.
+    section_heading_max_len : int
+        Comprimento máximo de uma linha para ser candidata a título de seção.
+    retrieval_drug_term_min_len : int
+        Comprimento mínimo de um termo para ser considerado medicamento na
+        guarda lexical (reduz falsos positivos como ``sol`` ou ``am``).
     medico_temperature : float
         Temperatura do LLM para o perfil MEDICO (padrão: 0.1).
     medico_max_tokens : int
@@ -251,6 +263,113 @@ class Settings(BaseSettings):
     # Retrieval
     retrieval_top_k: int = Field(default=10)
     retrieval_score_threshold: float = Field(default=0.4)
+    retrieval_stopwords: tuple[str, ...] = (
+        "qual",
+        "quais",
+        "como",
+        "para",
+        "com",
+        "sem",
+        "dos",
+        "das",
+        "pelo",
+        "pela",
+        "uma",
+        "um",
+        "a",
+        "o",
+        "e",
+        "de",
+        "da",
+        "do",
+        "em",
+        "por",
+        "que",
+        "quando",
+        "onde",
+        "se",
+        "na",
+        "no",
+        "à",
+        "ao",
+        "aos",
+        "ser",
+        "são",
+        "sao",
+        "está",
+        "esta",
+        "sendo",
+        "fazer",
+        "faz",
+        "pode",
+        "podem",
+        "deve",
+        "devem",
+        "uso",
+        "usar",
+        "tomar",
+        "tomada",
+        "dia",
+        "dias",
+        "dose",
+        "doses",
+        "maxima",
+        "máxima",
+        "máximo",
+        "maximo",
+        "adulto",
+        "adultos",
+        "criança",
+        "crianca",
+        "crianças",
+        "criancas",
+        "tem",
+        "ter",
+        "via",
+        "oral",
+        "recomendada",
+        "recomendado",
+        "indicado",
+        "indicada",
+        "mg",
+        "ml",
+        "g",
+        "kg",
+    )
+    retrieval_drug_suffixes: tuple[str, ...] = (
+        "profeno",
+        "ona",
+        "cilina",
+        "micina",
+        "prazol",
+        "prazolam",
+        "prazina",
+        "pril",
+        "sartan",
+        "sartana",
+        "gliptina",
+        "gliflozina",
+        "cetamina",
+        "ciclovir",
+        "navir",
+        "statina",
+        "vastatina",
+        "floxacina",
+        "ciclina",
+        "tadina",
+        "pamina",
+        "triptilina",
+        "morfina",
+        "azepam",
+        "tamol",
+        "fibrato",
+        "barbital",
+        "fenac",
+        "penem",
+    )
+    section_heading_min_len: int = Field(default=3)
+    section_heading_max_len: int = Field(default=90)
+    retrieval_drug_term_min_len: int = Field(default=5)
 
     # Avaliação RAG (offline)
     eval_golden_set_path: Path = Field(default=Path("evals/dataset/golden_set.json"))

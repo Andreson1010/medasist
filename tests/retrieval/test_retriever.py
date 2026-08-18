@@ -392,6 +392,113 @@ def test_retrieve_cold_start_logs_metric(caplog, empty_stores, settings):
     assert "scores=[]" in message
 
 
+def test_retrieve_lexical_guard_blocks_cross_drug_cold_start(client, settings):
+    """Consulta sobre um medicamento não presente nos chunks retorna vazio.
+
+    Simula o cenário real: pergunta sobre dipirona recuperando chunks de
+    ibuprofeno (analgésico semelhante). Como nenhum chunk menciona dipirona,
+    a guarda lexical trata como cold start em vez de permitir alucinação.
+    """
+    from medasist.retrieval.retriever import retrieve
+
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["A dose maxima permitida por dia em adultos e de 640 gotas (3.200mg)."],
+        metadatas=[{"doc_type": "bula", "source": "bula_ibuprofeno.pdf"}],
+        ids=["bula_001"],
+    )
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    docs = retrieve(
+        "Qual a dose máxima de dipirona para adultos?",
+        {DocType.BULA: store},
+        settings_loose,
+    )
+
+    assert docs == []
+
+
+def test_retrieve_lexical_guard_allows_same_drug(client, settings):
+    """Consulta sobre medicamento presente nos chunks mantém o resultado."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Amoxicilina 500mg: dose habitual de 1 cápsula a cada 8 horas."],
+        metadatas=[{"doc_type": "bula", "source": "bula_amoxicilina.pdf"}],
+        ids=["bula_001"],
+    )
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    docs = retrieve(
+        "Qual a dose de amoxicilina para adultos?",
+        {DocType.BULA: store},
+        settings_loose,
+    )
+
+    assert len(docs) > 0
+    assert all(isinstance(d, Document) for d in docs)
+
+
+def test_retrieve_lexical_guard_ignores_queries_without_drug(client, settings):
+    """Consulta sem termo de medicamento não é bloqueada pela guarda."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = get_vectorstore(DocType.DIRETRIZ, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Diretriz de hipertensão: reduzir sal e praticar atividade física."],
+        metadatas=[{"doc_type": "diretriz", "source": "htn_guideline.pdf"}],
+        ids=["dir_001"],
+    )
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+
+    docs = retrieve(
+        "Como controlar a hipertensão arterial?",
+        {DocType.DIRETRIZ: store},
+        settings_loose,
+    )
+
+    assert len(docs) > 0
+
+
+def test_drug_terms_in_extracts_drug_suffixes(settings):
+    """_drug_terms_in identifica termos com sufixo de droga na consulta."""
+    from medasist.retrieval.retriever import _drug_terms_in
+
+    assert _drug_terms_in("Qual a dose de dipirona para adultos?", settings) == {
+        "dipirona"
+    }
+    assert _drug_terms_in("Amoxicilina 500mg a cada 8 horas", settings) == {
+        "amoxicilina"
+    }
+    assert _drug_terms_in("Como tratar pneumonia em camaleões?", settings) == set()
+
+
+def test_drug_terms_in_ignores_common_words(settings):
+    """Palavras comuns que terminam em sufixo de droga não são medicamentos."""
+    from medasist.retrieval.retriever import _drug_terms_in
+
+    for query in (
+        "Evitar exposição ao sol durante o tratamento",
+        "Quantas vezes tomaram o medicamento por dia?",
+        "Como a paciente menina deve tomar o remédio?",
+        "Qual o efeito colateral do álcool?",
+    ):
+        assert _drug_terms_in(query, settings) == set()
+
+
 def test_retrieve_continues_when_one_store_fails_and_logs_failed_store(
     caplog, client, embeddings, settings
 ):

@@ -40,7 +40,8 @@ class TestPromptRegistry:
     ) -> None:
         templates = [
             registry.get_prompt(profile)  # type: ignore[union-attr]
-            .messages[0].prompt.template
+            .messages[0]
+            .prompt.template
             for profile in UserProfile
         ]
         assert len(set(templates)) == len(templates), "Perfis têm templates duplicados"

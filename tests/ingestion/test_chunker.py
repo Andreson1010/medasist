@@ -139,3 +139,57 @@ def test_chunk_bula_respects_sections(settings):
     # Nenhum chunk deve ser vazio
     for chunk in chunks:
         assert chunk.text.strip() != ""
+
+
+def test_chunk_tracks_page_number(settings):
+    """Cada chunk preserva o número da página de origem."""
+    doc = LoadedDocument(
+        path=FAKE_PATH,
+        doc_type=DocType.BULA,
+        sha256=FAKE_SHA,
+        pages=(
+            PageContent(page_number=1, text=_long_text(100)),
+            PageContent(page_number=2, text=_long_text(100)),
+            PageContent(page_number=3, text=_long_text(100)),
+        ),
+    )
+    chunks = chunk_document(doc, settings)
+
+    assert len(chunks) > 0
+    assert all(chunk.page is not None for chunk in chunks)
+    assert {chunk.page for chunk in chunks} == {1, 2, 3}
+
+
+def test_chunk_detects_allcaps_section_heading(settings):
+    """Linha em caixa alta é detectada como seção do chunk seguinte."""
+    text = (
+        "INFORMAÇÕES AO PACIENTE\n\n"
+        "Zolatril 250mg é indicado para tratamento de infecções bacterianas. " * 20
+    )
+    doc = _make_doc(DocType.BULA, text)
+    chunks = chunk_document(doc, settings)
+
+    assert chunks
+    assert any("INFORMAÇÕES AO PACIENTE" in chunk.section for chunk in chunks)
+
+
+def test_chunk_detects_numbered_section_heading(settings):
+    """Numeração hierárquica (ex: 3.1 TÍTULO) é detectada como seção."""
+    text = (
+        "3.1 POSOLOGIA\n\n"
+        "Administrar Zolatril 250mg a cada 8 horas por sete dias. " * 20
+    )
+    doc = _make_doc(DocType.DIRETRIZ, text)
+    chunks = chunk_document(doc, settings)
+
+    assert chunks
+    assert any("3.1 POSOLOGIA" in chunk.section for chunk in chunks)
+
+
+def test_chunk_section_defaults_to_empty_without_heading(settings):
+    """Sem título detectável, section permanece vazio."""
+    doc = _make_doc(DocType.BULA, _long_text())
+    chunks = chunk_document(doc, settings)
+
+    assert chunks
+    assert all(chunk.section == "" for chunk in chunks)
