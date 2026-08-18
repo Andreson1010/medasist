@@ -38,7 +38,7 @@ tests/
 **Location:** All `test_*.py` files
 **Mock patterns:**
 - LLM: `patch("medasist.generation.chain.ChatOpenAI")` with `MagicMock` returning `AIMessage(content=...)`; `mock_llm_cls.assert_not_called()` verifies cold-start
-- ChromaDB: `chromadb.PersistentClient(path=str(tmp_path / "chroma"))` — real ChromaDB in per-test temp dir (NOT `EphemeralClient` as CLAUDE.md states)
+- ChromaDB: `chromadb.PersistentClient(path=str(tmp_path / "chroma"))` — real ChromaDB in per-test temp dir (NOT `EphemeralClient` as AGENTS.md states)
 - Embeddings: `_FakeEmbeddings(Embeddings)` returns deterministic 4-dim vectors; `_DivergentEmbeddings` for threshold testing
 - PDF: `patch("medasist.ingestion.loader.pdfplumber")` and `patch("medasist.ingestion.loader.fitz")` with `MagicMock` factories
 - HTTP: `patch("medasist.ui.client.httpx.Client")` with context-manager MagicMock
@@ -82,7 +82,7 @@ tests/
 
 **Current:** Measured via `--cov=src` (source: `src/` only; `scripts/` not measured despite being tested)
 **Goals:** 80% minimum
-**Enforcement:** `--cov-fail-under=80` — **only in Makefile/CLAUDE.md commands, NOT in `pyproject.toml` `addopts`**. A bare `pytest` will report coverage but won't fail below 80%.
+**Enforcement:** `--cov-fail-under=80` — **only in Makefile/AGENTS.md commands, NOT in `pyproject.toml` `addopts`**. A bare `pytest` will report coverage but won't fail below 80%.
 **Omit:** `*/ui/*` excluded from coverage (Streamlit app)
 
 ## Test Coverage Matrix
@@ -148,8 +148,9 @@ No `faker` / `factory-boy`. All synthetic data handcrafted with fictional medica
 
 ## Safety Rule Testing
 
-The CLAUDE.md "inegociavel" rules are explicitly tested:
+The AGENTS.md "inegociavel" rules are explicitly tested:
 - Cold start on empty retrieval: `test_chain.py::test_llm_not_called_on_cold_start` — `mock_llm_cls.assert_not_called()`
 - Cold start on hallucinated citations: `test_chain.py` — LLM emits `[99]` with no matching CitationItem -> cold start fallback
 - Disclaimer present: verified in all `GenerationResult` assertions
 - Citation validation: `test_citations.py` — orphan removal, hallucinated markers stripped
+

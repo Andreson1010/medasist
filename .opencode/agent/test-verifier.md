@@ -77,7 +77,7 @@ Wait for confirmation before writing tests if more than one criterion is untesta
 
 One file. All acceptance criteria in it. No scattering across multiple files.
 
-File location: `tests/acceptance/test_[feature-slug].py` (or the equivalent for this project's test structure — check CLAUDE.md).
+File location: `tests/acceptance/test_[feature-slug].py` (or the equivalent for this project's test structure — check AGENTS.md).
 
 ### Test structure
 
@@ -110,7 +110,7 @@ Do not test private functions. Do not reach into implementation details. If you 
 
 ### Follow project test conventions
 
-Check CLAUDE.md for testing conventions. In this project:
+Check AGENTS.md for testing conventions. In this project:
 - Mock all LLM calls — never make real API calls to LM Studio in tests
 - Use `chromadb.PersistentClient(path=str(tmp_path / "chroma"))` for ChromaDB tests
 - Test empty retrieval edge cases (cold start safety rule)
@@ -192,5 +192,6 @@ A feature is VERIFIED when:
 3. Any untestable criteria are explicitly acknowledged by the human
 
 A feature is NOT VERIFIED if any criterion is failing or silently uncovered. "The unit tests pass" is not verification. The story defines done — not the builders.
+
 
 

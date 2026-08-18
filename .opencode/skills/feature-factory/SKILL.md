@@ -94,7 +94,7 @@ STATE = {
 **You (the orchestrator) do this yourself — no subagent.** This phase exists to close a recurring failure mode: subagents spawned with per-call `isolation: "worktree"` each get their own throwaway worktree+branch off `main`. Their edits never land in one place, diverge from each other, and vanish when each worktree is cleaned up — "edits not persisting" and orphaned `.opencode/worktrees/agent-*` / `worktree-agent-*` branches are symptoms of this (see PR #30 cleanup). **Fix: one worktree, one branch, for the entire pipeline run.** Never pass `isolation: "worktree"` to any subagent in this pipeline — every subagent operates inside `STATE.worktree_path` via the paths and commands the orchestrator gives it.
 
 1. Derive `STATE.feature_slug` (kebab-case) from `STATE.feature_request` — the same name you'd use for a branch.
-2. Derive `STATE.feature_branch`: `feature/<feature_slug>` for new features, `fix/<feature_slug>` for bug fixes (CLAUDE.md naming convention).
+2. Derive `STATE.feature_branch`: `feature/<feature_slug>` for new features, `fix/<feature_slug>` for bug fixes (AGENTS.md naming convention).
 3. Create the worktree:
    ```bash
    git fetch origin
@@ -219,7 +219,7 @@ feature_branch:    STATE.feature_branch
 tlc_scope:         STATE.tlc_scope
 approved_story:    STATE.approved_story
 researcher_output: STATE.researcher_output
-claude_md:         [contents of CLAUDE.md from the project root]
+project_instructions:         [contents of AGENTS.md from the project root]
 tlc_context:       [paths that exist: PROJECT.md, STATE.md, CONCERNS.md, other .specs/codebase/*.md]
 tlc_skill_refs:    Specify → references/specify.md (technical translation only)
                    Design  → references/design.md (only if tlc_scope is large or complex)
@@ -255,7 +255,7 @@ Check carefully:
 - "Data Model Changes" — correct types, migration notes?
 - "Risks" — any marked "clear" that you know aren't?
 - "Open Questions" — anything that must be resolved before building?
-- **`design.md`** (if present) — architecture matches CLAUDE.md and researcher findings?
+- **`design.md`** (if present) — architecture matches AGENTS.md and researcher findings?
 - **`tasks.md`** (if present) — tasks are atomic, dependencies correct, IDs trace to spec?
 
 **Type APPROVE to begin implementation, or provide feedback to revise the spec.**
@@ -283,7 +283,7 @@ spec_paths:        STATE.approved_spec.spec_paths  (Quick Mode: nil — use rese
 researcher_output: STATE.researcher_output
 worktree_path:     STATE.worktree_path
 feature_branch:    STATE.feature_branch
-claude_md:         [contents of CLAUDE.md from the project root]
+project_instructions:         [contents of AGENTS.md from the project root]
 ```
 
 Builders **must read** `spec_paths.spec` from disk. Use `design.md` and `tasks.md` when present for architecture and task order. Do **not** run TLC Execute.
@@ -477,3 +477,5 @@ Use this table whenever a phase reports failures. Do not re-run the validator to
 10. **Never use per-call `isolation: "worktree"` on Agent spawns in this pipeline.** Phase 0 creates the single worktree for the whole run; per-call isolation creates divergent, throwaway worktrees/branches and is the #1 cause of "wrong worktree" and "edits didn't persist" failures.
 11. **Re-verify the worktree before every spawn from Phase 1 onward.** Run `git -C "<worktree_path>" branch --show-current` and confirm it still equals `STATE.feature_branch` before passing `worktree_path`/`feature_branch` to the next subagent. If it doesn't match, STOP — do not spawn.
 12. **The Persistence Gate is mandatory after Phases 3, 4, 5, and 6 — no exceptions.** A phase is not "complete" until the gate returns PERSISTED. Do not proceed on a subagent's self-reported summary alone.
+
+

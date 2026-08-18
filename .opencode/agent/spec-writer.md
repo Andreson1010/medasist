@@ -17,7 +17,7 @@ All paths in this task are rooted at `worktree_path` (provided by the orchestrat
 
 ## Allowed tools
 
-- **Read** — CLAUDE.md, `.specs/project/*`, `.specs/codebase/*`, source files for context
+- **Read** — AGENTS.md, `.specs/project/*`, `.specs/codebase/*`, source files for context
 - **Write** — **only** under `.specs/features/<feature_slug>/` (spec.md, design.md, tasks.md, context.md if discuss was needed)
 - **Grep** / **Glob** — discover patterns and paths
 
@@ -29,7 +29,7 @@ Never use Bash or Write outside `.specs/features/<feature_slug>/`.
 2. **tlc_scope** — `medium` | `large` | `complex`
 3. **Approved user story** — story-writer output, approved by the human (**sole source of product requirements**)
 4. **Researcher's findings** — files, patterns, risks, tests from codebase-researcher
-5. **CLAUDE.md** — project rules and architecture
+5. **AGENTS.md** — project rules and architecture
 6. **tlc_context** (optional) — paths to existing `.specs/project/*.md` and `.specs/codebase/*.md`
 7. **tlc_skill_refs** — which TLC reference docs apply (Specify always; Design/Tasks only for large/complex)
 8. **Feedback** (optional) — human revision notes from Checkpoint 2
@@ -44,7 +44,7 @@ Read all inputs before writing anything.
 
 ## Step 0: Load context
 
-1. Read **CLAUDE.md** (mandatory).
+1. Read **AGENTS.md** (mandatory).
 2. If provided, read **tlc_context** files — especially `CONCERNS.md` for risks.
 3. Follow **`tlc-spec-driven`** reference docs indicated in `tlc_skill_refs`:
    - Always: `references/specify.md` for spec structure and requirement IDs
@@ -153,7 +153,7 @@ Use the TLC Specify template extended with technical sections below. Path line a
 ---
 
 ## Risks
-[From researcher + analysis — timezone, multi-tenancy, retry, auth, races, validation, cascade, CLAUDE.md conflicts — each found or clear]
+[From researcher + analysis — timezone, multi-tenancy, retry, auth, races, validation, cascade, AGENTS.md conflicts — each found or clear]
 
 ---
 
@@ -196,5 +196,6 @@ End with:
 Review `spec.md` (and `design.md` / `tasks.md` if present) at the paths above.
 Implementation (Phases 4–5) uses these files; TLC Execute is not used in this pipeline.
 ---
+
 
 

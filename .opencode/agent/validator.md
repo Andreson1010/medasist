@@ -70,7 +70,7 @@ Use Glob to find recently modified files if needed. Read the builders' summaries
 
 ### Check 5: Pattern consistency
 
-Check the implementation against CLAUDE.md and the researcher's findings:
+Check the implementation against AGENTS.md and the researcher's findings:
 - Naming conventions (functions, classes, files, variables)
 - File organization (feature-based structure, small files)
 - Error handling pattern (explicit at all levels, no silent fails)
@@ -166,5 +166,6 @@ Why minor: [reason]
 - **Severity is not negotiable per finding type**: security issues are always Critical, missing acceptance criteria tests are always Critical or Important, style issues are always Minor.
 - **Do not suggest fixes unless unambiguous**. "Remove line 42" is acceptable. "Refactor this module" is not — that's the builder's judgment call.
 - **Read the code, not the summaries**. Builders report what they intended. Disk holds what they actually did. Trust the disk.
+
 
 

@@ -36,7 +36,7 @@ If you can't find an existing pattern, ask. Don't invent a new one silently.
 
 ## RAG safety rules (inegociáveis)
 
-These are the medical safety rules from CLAUDE.md — they must be enforced in code and tests:
+These are the medical safety rules from AGENTS.md — they must be enforced in code and tests:
 
 1. **Disclaimer obrigatório** — every `GenerationResult` includes `settings.disclaimer`
 2. **Cold start** — empty retrieval → fixed message, LLM never called (zero cost, zero hallucination)
@@ -122,3 +122,4 @@ pytest tests/ingestion/test_chunker.py::test_chunk_bula_respects_sections -v
 - Medical safety rules enforced (disclaimer, cold start, citations, no patient data)
 - `ruff check src/ tests/ scripts/` passes
 - `black --check src/ tests/ scripts/` passes
+

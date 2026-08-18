@@ -19,7 +19,7 @@ git pull origin main
 git checkout -b feature/<short-name>   # or fix/<short-name> for bug fixes
 ```
 
-Naming: `feature/<name>` or `fix/<name>` (this repo's convention — see existing `origin/feature/*` and `origin/fix/*` branches and CLAUDE.md "Git Workflow"). Keep `<short-name>` kebab-case and descriptive. Commits in Portuguese, imperative mood: `feat: adiciona endpoint de consulta RAG`.
+Naming: `feature/<name>` or `fix/<name>` (this repo's convention — see existing `origin/feature/*` and `origin/fix/*` branches and AGENTS.md "Git Workflow"). Keep `<short-name>` kebab-case and descriptive. Commits in Portuguese, imperative mood: `feat: adiciona endpoint de consulta RAG`.
 
 If currently on `main` with uncommitted work, branch first (`git checkout -b feature/<name>`), then commit — never commit to `main` and branch afterward.
 
@@ -133,7 +133,7 @@ Only after the review is clean (or all blocking findings addressed):
 gh pr merge --squash
 ```
 
-Then sync local `main` (per CLAUDE.md "Run `git pull origin main` after merging PRs"):
+Then sync local `main` (per AGENTS.md "Run `git pull origin main` after merging PRs"):
 
 ```bash
 git checkout main
@@ -150,3 +150,4 @@ git branch -d feature/<short-name>
 3. **Critical/Important findings block merge.** Only Minor findings are optional.
 4. **Squash-merge, then pull `main`.** Don't leave local `main` stale after merging.
 5. **Never force-push or amend commits already pushed to the PR branch** — push new commits instead.
+

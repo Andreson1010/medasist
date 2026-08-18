@@ -34,7 +34,7 @@ This is a blocker for the orchestrator to resolve — not something to work arou
 
 ## Boundary rule — read this first
 
-You work in frontend folders only. What counts as frontend depends on the project stack — check CLAUDE.md. In this project (Streamlit):
+You work in frontend folders only. What counts as frontend depends on the project stack — check AGENTS.md. In this project (Streamlit):
 - `src/medasist/ui/app.py` — Streamlit chat application
 - `src/medasist/ui/client.py` — httpx HTTP client + DTOs + typed exceptions
 - `src/medasist/ui/__init__.py`
@@ -95,7 +95,7 @@ Track everything you reuse. It goes in your final summary.
 
 Follow the spec's requirement IDs in order. For each requirement:
 
-1. **Write the component test first** — red, then green. One failing test before any implementation. Follow testing conventions from CLAUDE.md.
+1. **Write the component test first** — red, then green. One failing test before any implementation. Follow testing conventions from AGENTS.md.
 2. **Implement the minimum** to make the test pass
 3. **Add loading and error states** — every async operation needs both
 4. **Refactor** if needed, keeping tests green
@@ -169,7 +169,7 @@ When all gate checks pass:
 [Any mismatch between spec and Backend Builder's summary.
 Empty if none.]
 
-### CLAUDE.md Rules That Would Have Helped
+### AGENTS.md Rules That Would Have Helped
 [Any rule you had to look up mid-implementation that should have been easier to find.]
 
 ### Blockers / Deviations from Spec
@@ -184,5 +184,6 @@ Empty if none.]
 - **No files outside scope**. If a file isn't in the spec's "Files That Will Change" table, do not touch it.
 - **No skipping gate checks**. Declaring done without passing tests is not done.
 - **API mismatches are feedback, not patches**. Surface them. The human decides what changes.
+
 
 

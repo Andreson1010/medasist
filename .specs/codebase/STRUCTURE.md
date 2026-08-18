@@ -81,7 +81,7 @@ medasist/
 ├── requirements-ui.txt
 ├── requirements-dev.txt
 ├── .env / .env.example
-├── CLAUDE.md
+├── AGENTS.md
 └── README.md
 ```
 
@@ -288,7 +288,7 @@ agêntica, sem busca web, sem execução de código).
 
 ### Motivos
 
-1. A estrutura atual espelha as camadas reais do pipeline (`ingestion/ → vectorstore/ → retrieval/ → generation/`), conforme CLAUDE.md.
+1. A estrutura atual espelha as camadas reais do pipeline (`ingestion/ → vectorstore/ → retrieval/ → generation/`), conforme AGENTS.md.
 2. `tests/` espelha `src/` 1:1 — migrar quebraria o padrão de espelhamento e o fluxo de review.
 3. Layout `src/medasist/` (single package) é exigido pelo `python -m uvicorn medasist.api.main:app` e pelo Streamlit.
 4. Custo de migração alto (~16 módulos, 267+ testes, Dockerfiles) para benefício zero.
@@ -303,3 +303,4 @@ O conceito de `evals/` será adotado no **OBS-03 (Avaliação RAGAS)**, encaixan
 Elementos da optional **rejeitados**: `config/prompts.py` (prompts ficam em `generation/prompts.py`),
 `database/vector_store.py` (fica `vectorstore/store.py`), `utils/logger.py` (substituído por
 `logging_setup.py` do OBS-01), `utils/tracer.py` (sem telemetria distribuída no escopo atual).
+
