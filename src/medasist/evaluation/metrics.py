@@ -211,6 +211,60 @@ def _aggregate(result: Any, metric: str) -> float | None:
     return fmean(valid)
 
 
+def _reciprocal_rank(
+    contexts: list[str],
+    reference_contexts: list[str],
+) -> float:
+    """Calcula o rank recíproco (MRR) do primeiro hit em ``reference_contexts``.
+
+    Retorna ``1 / rank`` da primeira posição de ``contexts`` cujo contexto
+    aparece em ``reference_contexts`` (rank baseado em 1); ``0.0`` quando
+    nenhum contexto recuperado está entre os de referência.
+
+    Parameters
+    ----------
+    contexts : list[str]
+        Contextos recuperados por ``retrieve`` (na ordem retornada).
+    reference_contexts : list[str]
+        Contextos de referência do golden set (ground truth).
+
+    Returns
+    -------
+    float
+        Rank recíproco (entre 0.0 e 1.0).
+    """
+    for rank, context in enumerate(contexts, start=1):
+        if context in reference_contexts:
+            return 1.0 / rank
+    return 0.0
+
+
+def _aggregate_mrr(
+    rows: list[dict[str, Any]],
+    eval_indices: list[int],
+) -> float | None:
+    """Calcula a média do MRR sobre o subconjunto não-cold-start.
+
+    Parameters
+    ----------
+    rows : list[dict[str, Any]]
+        Linhas do dataset com ``contexts`` e ``reference_contexts``.
+    eval_indices : list[int]
+        Índices das perguntas avaliadas (não-cold-start).
+
+    Returns
+    -------
+    float | None
+        Média do rank recíproco, ou ``None`` quando não há perguntas avaliadas.
+    """
+    if not eval_indices:
+        return None
+    return fmean(
+        _reciprocal_rank(rows[i]["contexts"], rows[i]["reference_contexts"])
+        for i in eval_indices
+    )
+
+
 def _collect_rows(
     questions: list[GoldenQuestion],
     stores: dict[DocType, Any],
@@ -389,6 +443,7 @@ def _build_per_question(
                 "context_recall": None,
                 "faithfulness": None,
                 "answer_relevancy": None,
+                "mrr": None,
             }
         else:
             qmetrics = {
@@ -399,6 +454,9 @@ def _build_per_question(
                 "faithfulness": _score_at(generation_result, pos, "faithfulness"),
                 "answer_relevancy": _score_at(
                     generation_result, pos, "answer_relevancy"
+                ),
+                "mrr": _reciprocal_rank(
+                    list(row["contexts"]), list(row["reference_contexts"])
                 ),
             }
             pos += 1
@@ -417,6 +475,8 @@ def _build_per_question(
 def _build_aggregates(
     retrieval_result: Any,
     generation_result: Any | None,
+    rows: list[dict[str, Any]],
+    eval_indices: list[int],
 ) -> dict[str, float | None]:
     """Calcula a média por métrica sobre o subconjunto onde foi avaliada.
 
@@ -426,6 +486,10 @@ def _build_aggregates(
         Resultado do conjunto de retrieval.
     generation_result : Any | None
         Resultado do conjunto de geração (pode ser ``None``).
+    rows : list[dict[str, Any]]
+        Linhas do dataset (para o MRR customizado).
+    eval_indices : list[int]
+        Índices das perguntas não-cold-start (subconjunto do MRR).
 
     Returns
     -------
@@ -437,6 +501,7 @@ def _build_aggregates(
         "context_recall": _aggregate(retrieval_result, "context_recall"),
         "faithfulness": _aggregate(generation_result, "faithfulness"),
         "answer_relevancy": _aggregate(generation_result, "answer_relevancy"),
+        "mrr": _aggregate_mrr(rows, eval_indices),
     }
 
 
@@ -513,7 +578,7 @@ def evaluate_golden_set(
     ret_result, gen_result = _evaluate_sets(rows, eval_indices, settings, batch)
 
     return EvaluationReport(
-        aggregates=_build_aggregates(ret_result, gen_result),
+        aggregates=_build_aggregates(ret_result, gen_result, rows, eval_indices),
         per_question=_build_per_question(rows, cold_flags, ret_result, gen_result),
         num_questions=len(rows),
         num_cold_start=sum(cold_flags),
