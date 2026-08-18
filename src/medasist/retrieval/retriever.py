@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -14,6 +15,8 @@ from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
 
 logger = logging.getLogger(__name__)
+
+_TOKEN_RE = re.compile(r"\b[a-zà-ú0-9]+\b")
 
 
 # ---------------------------------------------------------------------------
@@ -195,18 +198,115 @@ def retrieve(
         if content not in seen or score < seen[content][1]:
             seen[content] = (doc, score)
 
-    # Ordena por distância crescente e respeita top_k
+    # Ordena por distância crescente
     sorted_docs = sorted(seen.values(), key=lambda x: x[1])
-    top_docs = sorted_docs[:k]
+
+    # Guarda lexical: impede contaminação cruzada entre documentos.
+    # Se a consulta menciona um medicamento (termo com sufixo de droga) que
+    # não aparece em nenhum chunk recuperado, trata como cold start em vez de
+    # permitir que o LLM alucine a partir de um documento sobre outro fármaco.
+    guarded = _lexical_relevance_guard(query, sorted_docs, settings)
+
+    top_docs = guarded[:k]
     scores = [score for _, score in top_docs]
+
+    if not top_docs and sorted_docs:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        _log_retrieve_metric(
+            query, stores, [], [], elapsed_ms, failed_stores=failed_stores
+        )
+        return []
 
     logger.debug(
         "retrieve retorna %d documento(s) após deduplicação e top_k.", len(top_docs)
     )
     _log_retrieve_metric(
-        query, stores, top_docs, scores, elapsed_ms, failed_stores=failed_stores
+        query,
+        stores,
+        [doc for doc, _ in top_docs],
+        scores,
+        elapsed_ms,
+        failed_stores=failed_stores,
     )
     return [doc for doc, _ in top_docs]
+
+
+def _lexical_relevance_guard(
+    query: str,
+    docs: list[tuple[Document, float]],
+    settings: Settings,
+) -> list[tuple[Document, float]]:
+    """Bloqueia chunks que não têm relação lexical com o medicamento perguntado.
+
+    Extrai da consulta os termos com cara de medicamento (sufixo de droga).
+    Quando existe pelo menos um desses termos, exige que ele apareça em ao
+    menos um chunk recuperado. Se nenhum chunk menciona o medicamento, retorna
+    lista vazia (cold start) — evita que o LLM responda sobre um fármaco usando
+    apenas documentos de outro fármaco.
+
+    Parameters
+    ----------
+    query : str
+        Pergunta do usuário.
+    docs : list[tuple[Document, float]]
+        Candidatos já deduplicados e ordenados (Document, distância).
+    settings : Settings
+        Configurações com stopwords e sufixos de droga.
+
+    Returns
+    -------
+    list[tuple[Document, float]]
+        Candidatos originais quando pelo menos um menciona o medicamento da
+        consulta, ou lista vazia quando nenhum supera a guarda lexical.
+    """
+    drug_terms = _drug_terms_in(query, settings)
+    if not drug_terms:
+        return docs
+
+    texts: list[str] = []
+    for doc, _ in docs:
+        source = doc.metadata.get("source", "") or doc.metadata.get("source_path", "")
+        texts.append(f"{doc.page_content} {source}".lower())
+    corpus_text = " ".join(texts)
+    if any(term in corpus_text for term in drug_terms):
+        return docs
+
+    logger.warning(
+        "Guarda lexical: consulta menciona medicamento(s) %s, mas nenhum chunk "
+        "recuperado os contém. Tratando como cold start.",
+        sorted(drug_terms),
+    )
+    return []
+
+
+def _drug_terms_in(query: str, settings: Settings) -> set[str]:
+    """Retorna termos com sufixo de droga presentes na consulta.
+
+    Considera apenas termos com comprimento >= ``retrieval_drug_term_min_len``
+    para evitar falsos positivos de palavras comuns curtas.
+
+    Parameters
+    ----------
+    query : str
+        Pergunta do usuário.
+    settings : Settings
+        Configurações com stopwords, sufixos de droga e comprimento mínimo.
+
+    Returns
+    -------
+    set[str]
+        Termos da consulta (minúsculos, sem stopwords) que terminam com um
+        sufixo típico de medicamento.
+    """
+    tokens = {m.group(0) for m in _TOKEN_RE.finditer(query.lower())}
+    stopwords = set(settings.retrieval_stopwords)
+    content_tokens = tokens - stopwords
+    min_len = settings.retrieval_drug_term_min_len
+    return {
+        t
+        for t in content_tokens
+        if len(t) >= min_len and t.endswith(settings.retrieval_drug_suffixes)
+    }
 
 
 def _log_retrieve_metric(
