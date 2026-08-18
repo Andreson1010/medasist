@@ -57,6 +57,15 @@ class TestBuildCitations:
         assert item.section == ""
         assert item.page == ""
 
+    def test_zero_page_defaults_to_empty_string(self) -> None:
+        """Página 0 (sentinela ChromaDB) é exibida como vazia na citação."""
+        doc = Document(
+            page_content="x",
+            metadata={"source": "a.pdf", "section": "S1", "page": 0},
+        )
+        item = build_citations([doc])[0]
+        assert item.page == ""
+
     def test_empty_docs_returns_empty_list(self) -> None:
         assert build_citations([]) == []
 

@@ -50,12 +50,13 @@ def build_citations(docs: list[Document]) -> list[CitationItem]:
     citations = []
     for i, doc in enumerate(docs, start=1):
         meta = doc.metadata
+        page = meta.get("page", "")
         citations.append(
             CitationItem(
                 index=i,
                 source=meta.get("source_path", meta.get("source", "")),
                 section=meta.get("section", ""),
-                page=str(meta.get("page", "")),
+                page=str(page) if page else "",
             )
         )
     logger.debug("build_citations: %d citações construídas.", len(citations))

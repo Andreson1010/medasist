@@ -83,6 +83,25 @@ def _collection_name(doc_type: DocType, settings: Settings) -> str:
     return getattr(settings, _COLLECTION_ATTR[doc_type])
 
 
+def _metadata_page(page: int | None) -> int:
+    """Normaliza o número da página para valores aceitos pelo ChromaDB.
+
+    O ChromaDB rejeita ``None`` em metadata. Como páginas são 1-based, o valor
+    ``0`` é usado como sentinela de página desconhecida.
+
+    Parameters
+    ----------
+    page : int | None
+        Número da página (1-based) ou ``None``.
+
+    Returns
+    -------
+    int
+        Página normalizada (``0`` quando ``None``).
+    """
+    return page if page is not None else 0
+
+
 def _already_indexed(collection: chromadb.Collection, sha256: str) -> bool:
     result = collection.get(where={"sha256": sha256}, limit=1, include=[])
     return len(result["ids"]) > 0
@@ -171,6 +190,8 @@ def ingest_document(
             "sha256": m.sha256,
             "chunk_index": m.chunk_index,
             "char_count": m.char_count,
+            "page": _metadata_page(m.page),
+            "section": m.section,
         }
         for m in metadata_list
     ]

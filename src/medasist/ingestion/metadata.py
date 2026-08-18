@@ -24,6 +24,10 @@ class ChunkMetadata:
         Posição do chunk na lista (0-based).
     char_count : int
         Número de caracteres no chunk.
+    page : int | None
+        Número da página de origem (1-based), quando conhecido.
+    section : str
+        Título da seção vigente no chunk, vazio se não detectado.
     """
 
     doc_type: str
@@ -31,6 +35,8 @@ class ChunkMetadata:
     sha256: str
     chunk_index: int
     char_count: int
+    page: int | None = None
+    section: str = ""
 
 
 def build_metadata(chunk: TextChunk) -> ChunkMetadata:
@@ -52,6 +58,8 @@ def build_metadata(chunk: TextChunk) -> ChunkMetadata:
         sha256=chunk.sha256,
         chunk_index=chunk.chunk_index,
         char_count=len(chunk.text),
+        page=chunk.page,
+        section=chunk.section,
     )
 
 

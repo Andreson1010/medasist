@@ -188,6 +188,86 @@ def test_ingest_document_uses_correct_collection(tmp_path, settings, chroma):
     assert col.count() > 0
 
 
+def test_ingest_document_persists_page_and_section(tmp_path, settings, chroma):
+    """Metadados de página e seção são gravados no ChromaDB."""
+    pdf = tmp_path / "bula_paginas.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    sha = "55667788" * 8
+    doc = LoadedDocument(
+        path=pdf.resolve(),
+        doc_type=DocType.BULA,
+        sha256=sha,
+        pages=(
+            PageContent(
+                page_number=1,
+                text="POSOLOGIA\n\n" + _LONG_TEXT[:200],
+            ),
+            PageContent(
+                page_number=2,
+                text="CONTRAINDICAÇÕES\n\n" + _LONG_TEXT[:200],
+            ),
+        ),
+    )
+
+    with patch("medasist.ingestion.pipeline.load_pdf", return_value=doc):
+        result = ingest_document(pdf, DocType.BULA, chroma, settings, _fake_embed)
+
+    assert result.chunks_indexed > 0
+    col = chroma.get_collection(settings.collection_bulas)
+    stored = col.get(include=["metadatas"])
+    metadatas = stored["metadatas"]
+
+    assert all("page" in m for m in metadatas)
+    assert all("section" in m for m in metadatas)
+    assert {m["page"] for m in metadatas} == {1, 2}
+    assert any("POSOLOGIA" in m["section"] for m in metadatas)
+    assert any("CONTRAINDICAÇÕES" in m["section"] for m in metadatas)
+
+
+def test_ingest_document_normalizes_none_page(tmp_path, settings, chroma):
+    """Chunk sem página é gravado com página 0 (ChromaDB rejeita None)."""
+    from medasist.ingestion.metadata import ChunkMetadata
+
+    pdf = tmp_path / "bula_sem_pagina.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    sha = "33445566" * 8
+    doc = LoadedDocument(
+        path=pdf.resolve(),
+        doc_type=DocType.BULA,
+        sha256=sha,
+        pages=(PageContent(page_number=1, text=_LONG_TEXT),),
+    )
+
+    def _build_metadata_batch(chunks):
+        return [
+            ChunkMetadata(
+                doc_type=chunk.doc_type.value,
+                source_path=chunk.source_path.name,
+                sha256=chunk.sha256,
+                chunk_index=chunk.chunk_index,
+                char_count=len(chunk.text),
+                page=None,
+                section="",
+            )
+            for chunk in chunks
+        ]
+
+    with (
+        patch("medasist.ingestion.pipeline.load_pdf", return_value=doc),
+        patch(
+            "medasist.ingestion.pipeline.build_metadata_batch",
+            side_effect=_build_metadata_batch,
+        ),
+    ):
+        result = ingest_document(pdf, DocType.BULA, chroma, settings, _fake_embed)
+
+    assert result.chunks_indexed > 0
+    assert result.error is None
+    col = chroma.get_collection(settings.collection_bulas)
+    stored = col.get(include=["metadatas"])
+    assert all(m["page"] == 0 for m in stored["metadatas"])
+
+
 def test_ingest_document_ids_are_deterministic(tmp_path, settings, chroma):
     """Upsert com mesmo sha256 não duplica chunks na coleção."""
     pdf = tmp_path / "protocolo.pdf"
