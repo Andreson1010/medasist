@@ -9,6 +9,7 @@ import pytest
 from medasist.config import Settings
 from medasist.ingestion.pipeline import (
     IngestionResult,
+    build_embed_fn,
     ingest_directory,
     ingest_document,
 )
@@ -64,6 +65,29 @@ def settings() -> Settings:
 def chroma(tmp_path) -> chromadb.ClientAPI:
     """PersistentClient em diretório temporário — isolado por teste."""
     return chromadb.PersistentClient(path=str(tmp_path / "chroma"))
+
+
+# ---------------------------------------------------------------------------
+# build_embed_fn
+# ---------------------------------------------------------------------------
+
+
+def test_build_embed_fn_passes_retry_and_timeout_from_settings(settings):
+    """OBS-04: retry/backoff e timeout do Settings chegam ao OpenAIEmbeddings."""
+    settings.embedding_max_retries = 4
+    settings.embedding_request_timeout = 25.0
+
+    with patch("langchain_openai.OpenAIEmbeddings") as mock_emb_cls:
+        build_embed_fn(settings)
+
+    mock_emb_cls.assert_called_once_with(
+        base_url=settings.lm_studio_base_url,
+        api_key=settings.lm_studio_api_key.get_secret_value(),
+        model=settings.lm_studio_embedding_model,
+        check_embedding_ctx_length=False,
+        max_retries=4,
+        request_timeout=25.0,
+    )
 
 
 # ---------------------------------------------------------------------------

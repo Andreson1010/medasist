@@ -71,6 +71,16 @@ class Settings(BaseSettings):
         Nome do modelo LLM carregado no LM Studio.
     lm_studio_embedding_model : str
         Nome do modelo de embedding carregado no LM Studio.
+    llm_max_retries : int
+        Número máximo de tentativas nas chamadas ao LLM do LM Studio.
+        Retry com backoff exponencial (padrão: 2).
+    llm_request_timeout : float
+        Timeout em segundos por chamada ao LLM do LM Studio (padrão: 60.0).
+    embedding_max_retries : int
+        Número máximo de tentativas nas chamadas de embedding do LM Studio.
+        Retry com backoff exponencial (padrão: 2).
+    embedding_request_timeout : float
+        Timeout em segundos por chamada de embedding do LM Studio (padrão: 30.0).
     chroma_dir : Path
         Diretório de persistência do ChromaDB.
     data_dir : Path
@@ -143,6 +153,12 @@ class Settings(BaseSettings):
     lm_studio_api_key: SecretStr = Field(default=SecretStr("lm-studio"))
     lm_studio_llm_model: str = Field(default="phi-3-mini")
     lm_studio_embedding_model: str = Field(default="nomic-embed-text")
+
+    # Retry/backoff e timeout nas chamadas ao LM Studio
+    llm_max_retries: int = Field(default=2, ge=0)
+    llm_request_timeout: float = Field(default=60.0, gt=0)
+    embedding_max_retries: int = Field(default=2, ge=0)
+    embedding_request_timeout: float = Field(default=30.0, gt=0)
 
     # ChromaDB
     chroma_dir: Path = Field(default=Path("./chroma_db"))

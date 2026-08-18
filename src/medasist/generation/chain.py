@@ -138,6 +138,8 @@ def run_query(
         model=settings.lm_studio_llm_model,
         temperature=config.temperature,
         max_tokens=config.max_tokens,
+        max_retries=settings.llm_max_retries,
+        request_timeout=settings.llm_request_timeout,
     )
 
     chain = prompt | llm | StrOutputParser()
