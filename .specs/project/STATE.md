@@ -1,11 +1,18 @@
 # State
 
-**Last Updated:** 2026-08-18
-**Current Work:** OBS-04 (retry/backoff, PR #21) e RAG-04 (citações com página/seção + guarda lexical de fármacos, PR #22) concluídos e mergeados, fechando M3. Próximo passo: M4 — RAG-01 re-ranking ou RAG-02 hybrid search (denso + esparso)
+**Last Updated:** 2026-08-19
+**Current Work:** RAG-01 (reranking cross-encoder + MRR, PR #23) concluído e mergeado, abrindo M4. Próximo passo: RAG-02 hybrid search (denso + esparso via BM25 + fusão RRF)
 
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-013: Reranking cross-encoder + MRR no eval (RAG-01) (2026-08-19)
+
+**Decision:** Implementar RAG-01 (PR #23) em duas partes: (1) reranking cross-encoder no funil único `retrieve()`, entre o guarda lexical e o corte final — novo `src/medasist/retrieval/reranker.py` com `rerank_documents` + singleton lazy thread-safe do `CrossEncoder` (double-checked locking), batch único sobre até `rerank_top_n`, tie-break determinístico pela ordem L2, e degradação graciosa (falha/ausência do modelo → retorna ordem L2, erro logado, query nunca falha); (2) métrica MRR customizada no eval RAGAS (`_reciprocal_rank` + `_aggregate_mrr`), agregada sobre o subconjunto não-cold-start, exposta em `aggregates["mrr"]` e por pergunta, exibida no relatório do `evaluate_rag.py`. Cold start decidido PRÉ-rerank no L2 — o rerank nunca esvazia um contexto válido (regra de segurança médica). Configs em `Settings`: `retrieval_rerank_enabled` (default off), `retrieval_rerank_model` (`BAAI/bge-reranker-base`), `retrieval_rerank_top_n` (20), `retrieval_rerank_batch_size` (16), todos `gt=0`. Novo golden set alinhado ao corpus real (`evals/dataset/golden_set_aligned.json`) com reference contexts verbatim para match exato no MRR.
+**Reason:** O MedAssist ordenava trechos apenas por distância L2 (ANN), que reflete similaridade semântica aproximada, não relevância fina para a pergunta. O reranker cross-encoder eleva MRR e Context Precision fundamentando as respostas nos trechos mais relevantes.
+**Trade-off:** Rerank desabilitado por padrão (opt-in) para preservar comportamento; custo de carregar modelo cross-encoder em memória; dependência nova `sentence-transformers==3.3.1`. MRR usa match exato de texto — exige golden set com reference contexts verbatim (daí o `golden_set_aligned.json`).
+**Impact:** `config.py`, `retrieval/reranker.py` (novo), `retrieval/retriever.py`, `evaluation/metrics.py`, `scripts/evaluate_rag.py` (relatório genérico já exibe `mrr`), `requirements.txt`, `.env.example`, `.specs/features/rag-01-reranking/`, `evals/dataset/golden_set_aligned.json`, testes unit + integração + aceite. 452 testes, 97.54% cobertura. PR #23 mergeado.
 
 ### AD-001: Migração de flake8 para ruff (2026-08-07)
 
@@ -158,6 +165,7 @@ Nenhum blocker ativo.
 | 014 | OBS-03: avaliação RAG offline com RAGAS (PR #20) | 2026-08-11 | Done |
 | 015 | OBS-04: retry/backoff para LM Studio (PR #21) | 2026-08-18 | Done |
 | 016 | RAG-04: citações com página/seção + guarda lexical (PR #22) | 2026-08-18 | Done |
+| 017 | RAG-01: reranking cross-encoder + MRR (PR #23) | 2026-08-19 | Done |
 
 ---
 
@@ -181,6 +189,7 @@ Nenhum blocker ativo.
 - [x] FIX-07: CORS middleware (AD-009) — PR #17 merged
 - [x] OBS-04: retry/backoff para LM Studio (AD-012) — PR #21 merged
 - [x] RAG-04: citações com página/seção + guarda lexical (AD-012) — PR #22 merged
+- [x] RAG-01: reranking cross-encoder + MRR (AD-013) — PR #23 merged
 
 ---
 

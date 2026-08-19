@@ -123,9 +123,10 @@
 
 ### Features
 
-**RAG-01: Re-ranking de chunks** - PLANNED
+**RAG-01: Re-ranking de chunks** - DONE
 - Cross-encoder reranker no top-N recuperado
 - Subir MRR e Context Precision
+- PR #23 (AD-013)
 
 **RAG-02: Hybrid search (denso + esparso)** - PLANNED
 - Combinar similarity_search com BM25/keyword
