@@ -123,9 +123,7 @@ def mock_cross_encoder(mocker: MagicMock):
         (classe mockada, instância mockada).
     """
     instance = MagicMock()
-    mock_cls = mocker.patch(
-        "sentence_transformers.CrossEncoder", return_value=instance
-    )
+    mock_cls = mocker.patch("sentence_transformers.CrossEncoder", return_value=instance)
     return mock_cls, instance
 
 
@@ -256,9 +254,7 @@ def test_ac03_eval_collect_rows_applies_rerank_identical_contexts(
             is_cold_start=False,
         )
 
-    mocker.patch(
-        "medasist.evaluation.metrics.run_query", side_effect=_fake_run_query
-    )
+    mocker.patch("medasist.evaluation.metrics.run_query", side_effect=_fake_run_query)
 
     rows, cold_flags = _collect_rows(
         questions, stores, settings, UserProfile.MEDICO, None
@@ -311,9 +307,7 @@ def test_ac04_reranked_context_citations_map_to_valid_items(mocker: MagicMock) -
         mock_llm_cls.return_value = mock_llm_instance
         mock_llm_instance.return_value = AIMessage(content="Recomendo [1] e [2].")
 
-        result = run_query(
-            "qual a dose?", stores, UserProfile.MEDICO, settings
-        )
+        result = run_query("qual a dose?", stores, UserProfile.MEDICO, settings)
 
     assert result.is_cold_start is False
     assert len(result.citations) == 2
@@ -527,12 +521,7 @@ def test_ac10_returned_count_at_most_retrieval_top_k(mock_cross_encoder) -> None
     """AC-10: com rerank habilitado, o corte final devolve no máximo
     ``retrieval_top_k`` documentos."""
     _, instance = mock_cross_encoder
-    candidates = _candidates(
-        *[
-            (f"chunk-{i}", 0.1, DocType.MANUAL)
-            for i in range(6)
-        ]
-    )
+    candidates = _candidates(*[(f"chunk-{i}", 0.1, DocType.MANUAL) for i in range(6)])
     store = _store_with_candidates(candidates)
     instance.predict.return_value = [float(i) for i in range(6)]
     settings = _settings(retrieval_top_k=3, retrieval_rerank_enabled=True)
@@ -610,9 +599,7 @@ def test_ac12_singleton_thread_safe_loaded_once_under_contention(
     modelo uma única vez, mesmo com múltiplas queries simultâneas."""
     instance = MagicMock()
     instance.predict.return_value = [0.1, 0.9, 0.5]
-    mock_cls = mocker.patch(
-        "sentence_transformers.CrossEncoder", return_value=instance
-    )
+    mock_cls = mocker.patch("sentence_transformers.CrossEncoder", return_value=instance)
     candidates = _candidates(
         ("A", 0.1, DocType.BULA),
         ("B", 0.2, DocType.BULA),
