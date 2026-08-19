@@ -136,6 +136,20 @@ class Settings(BaseSettings):
     retrieval_rerank_batch_size : int
         Tamanho do lote nas chamadas ``predict`` do cross-encoder
         (padrão: 16, ``gt=0``).
+    retrieval_hybrid_enabled : bool
+        Habilita a busca híbrida (denso + esparso BM25) no funil único
+        ``retrieve`` (padrão: ``False`` — comportamento atual preservado até
+        opt-in, mesma estratégia do rerank RAG-01).
+    retrieval_hybrid_rrf_k : int
+        Constante ``k`` da fusão Reciprocal Rank Fusion (RRF), usada como
+        ``score = sum(1/(k + rank))`` por caminho (padrão: 60, ``gt=0``).
+    retrieval_hybrid_sparse_top_k : int
+        Número máximo de candidatos esparsos (BM25) por query
+        (padrão: 20, ``gt=0`` e default >= ``retrieval_top_k``).
+    retrieval_sparse_stopwords : tuple[str, ...]
+        Palavras ignoradas na tokenização esparsa (BM25). Lista própria,
+        separada de ``retrieval_stopwords``: unidades de dosagem
+        (``mg``, ``ml``, ``g``, ``kg``) NÃO são removidas no caminho esparso.
     medico_temperature : float
         Temperatura do LLM para o perfil MEDICO (padrão: 0.1).
     medico_max_tokens : int
@@ -385,6 +399,73 @@ class Settings(BaseSettings):
     retrieval_rerank_model: str = Field(default="BAAI/bge-reranker-base")
     retrieval_rerank_top_n: int = Field(default=20, gt=0)
     retrieval_rerank_batch_size: int = Field(default=16, gt=0)
+
+    # Busca híbrida (denso + esparso BM25, RAG-02)
+    retrieval_hybrid_enabled: bool = Field(default=False)
+    retrieval_hybrid_rrf_k: int = Field(default=60, gt=0)
+    retrieval_hybrid_sparse_top_k: int = Field(default=20, gt=0)
+    retrieval_sparse_stopwords: tuple[str, ...] = (
+        "qual",
+        "quais",
+        "como",
+        "para",
+        "com",
+        "sem",
+        "dos",
+        "das",
+        "pelo",
+        "pela",
+        "uma",
+        "um",
+        "a",
+        "o",
+        "e",
+        "de",
+        "da",
+        "do",
+        "em",
+        "por",
+        "que",
+        "quando",
+        "onde",
+        "se",
+        "na",
+        "no",
+        "ao",
+        "aos",
+        "ser",
+        "sao",
+        "esta",
+        "sendo",
+        "fazer",
+        "faz",
+        "pode",
+        "podem",
+        "deve",
+        "devem",
+        "uso",
+        "usar",
+        "tomar",
+        "tomada",
+        "dia",
+        "dias",
+        "dose",
+        "doses",
+        "maxima",
+        "maximo",
+        "adulto",
+        "adultos",
+        "crianca",
+        "criancas",
+        "tem",
+        "ter",
+        "via",
+        "oral",
+        "recomendada",
+        "recomendado",
+        "indicado",
+        "indicada",
+    )
 
     # Avaliação RAG (offline)
     eval_golden_set_path: Path = Field(default=Path("evals/dataset/golden_set.json"))

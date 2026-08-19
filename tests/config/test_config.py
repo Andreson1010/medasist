@@ -221,6 +221,75 @@ class TestSettingsRerank:
         assert settings.retrieval_rerank_batch_size == 3
 
 
+class TestSettingsHybridSearch:
+    def test_defaults_are_set(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.retrieval_hybrid_enabled is False
+        assert settings.retrieval_hybrid_rrf_k == 60
+        assert settings.retrieval_hybrid_sparse_top_k == 20
+        assert isinstance(settings.retrieval_sparse_stopwords, tuple)
+        assert "mg" not in settings.retrieval_sparse_stopwords
+        assert "ml" not in settings.retrieval_sparse_stopwords
+        assert "g" not in settings.retrieval_sparse_stopwords
+        assert "kg" not in settings.retrieval_sparse_stopwords
+
+    def test_sparse_top_k_default_ge_retrieval_top_k(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.retrieval_hybrid_sparse_top_k >= settings.retrieval_top_k
+
+    def test_custom_values_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            retrieval_hybrid_enabled=True,
+            retrieval_hybrid_rrf_k=30,
+            retrieval_hybrid_sparse_top_k=5,
+            retrieval_sparse_stopwords=("de", "a", "para"),
+        )
+        assert settings.retrieval_hybrid_enabled is True
+        assert settings.retrieval_hybrid_rrf_k == 30
+        assert settings.retrieval_hybrid_sparse_top_k == 5
+        assert settings.retrieval_sparse_stopwords == ("de", "a", "para")
+
+    def test_zero_rrf_k_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_hybrid_rrf_k=0,
+            )
+
+    def test_negative_rrf_k_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_hybrid_rrf_k=-1,
+            )
+
+    def test_zero_sparse_top_k_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_hybrid_sparse_top_k=0,
+            )
+
+    def test_negative_sparse_top_k_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_hybrid_sparse_top_k=-1,
+            )
+
+    def test_env_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("RETRIEVAL_HYBRID_ENABLED", "true")
+        monkeypatch.setenv("RETRIEVAL_HYBRID_RRF_K", "30")
+        monkeypatch.setenv("RETRIEVAL_HYBRID_SPARSE_TOP_K", "5")
+        monkeypatch.setenv("RETRIEVAL_SPARSE_STOPWORDS", '["de", "a", "para"]')
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.retrieval_hybrid_enabled is True
+        assert settings.retrieval_hybrid_rrf_k == 30
+        assert settings.retrieval_hybrid_sparse_top_k == 5
+        assert settings.retrieval_sparse_stopwords == ("de", "a", "para")
+
+
 class TestSettingsRetryBackoff:
     def test_defaults_are_set(self) -> None:
         settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
