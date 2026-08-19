@@ -867,9 +867,7 @@ def test_retrieve_hybrid_lexical_guard_blocks_cross_drug_sparse_hit(client, sett
 
 def test_retrieve_hybrid_per_doctype_isolation(client, settings):
     """doc_types=[BULA] limita candidatos esparsos à coleção de bulas (HYBR-10)."""
-    store_bula = get_vectorstore(
-        DocType.BULA, client, _DivergentEmbeddings(), settings
-    )
+    store_bula = get_vectorstore(DocType.BULA, client, _DivergentEmbeddings(), settings)
     store_bula.add_texts(
         texts=["Bula de dipirona para dor intensa."],
         metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf"}],

@@ -249,9 +249,7 @@ class SparseIndex:
             return []
         scores = self._bm25.get_scores(list(query_tokens))
         matched = [
-            i
-            for i, tokens in enumerate(self._tokenized)
-            if set(tokens) & query_tokens
+            i for i, tokens in enumerate(self._tokenized) if set(tokens) & query_tokens
         ]
         ordered = sorted(matched, key=lambda i: scores[i], reverse=True)[:top_k]
         return [(self._docs[i], float(scores[i])) for i in ordered]

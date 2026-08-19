@@ -175,9 +175,7 @@ def test_ac_hybr05_run_query_generates_answer_with_citation(client):
     settings = _settings()
 
     # recupera via caminho híbrido real (sparse-only)
-    sparse_docs = retrieve(
-        "Qual a dose de dipirona?", {DocType.BULA: store}, settings
-    )
+    sparse_docs = retrieve("Qual a dose de dipirona?", {DocType.BULA: store}, settings)
     assert len(sparse_docs) == 1
 
     # feed do contexto esparso na chain (LLM mockado)
@@ -217,9 +215,7 @@ def test_ac_hybr05_guard_blocks_cross_drug_sparse_hit_is_cold_start(client):
     )
     settings = _settings()
 
-    docs = retrieve(
-        "Qual a dose de dipirona?", {DocType.BULA: store}, settings
-    )
+    docs = retrieve("Qual a dose de dipirona?", {DocType.BULA: store}, settings)
 
     assert docs == []
 

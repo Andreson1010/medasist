@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock
 
 import chromadb
 import pytest
@@ -176,7 +175,9 @@ def test_get_sparse_index_built_once_and_reused(client):
     """Índice construído uma única vez por coleção e reutilizado."""
     settings = _settings()
     store = _bula_store(
-        client, settings, ["Bula de dipirona para dor."],
+        client,
+        settings,
+        ["Bula de dipirona para dor."],
         metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf", "page": 1}],
     )
 
@@ -191,7 +192,9 @@ def test_get_sparse_index_thread_safe_single_build(client, mocker):
     """Construção concorrente (threads) produz um único índice — sem race."""
     settings = _settings()
     store = _bula_store(
-        client, settings, ["Bula de dipirona para dor."],
+        client,
+        settings,
+        ["Bula de dipirona para dor."],
         metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf", "page": 1}],
     )
 
@@ -228,7 +231,9 @@ def test_get_sparse_index_stale_refresh_after_ingest(client):
     """Chunks ingeridos após a construção ficam visíveis na query seguinte."""
     settings = _settings()
     store = _bula_store(
-        client, settings, ["Bula de dipirona para dor."],
+        client,
+        settings,
+        ["Bula de dipirona para dor."],
         metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf", "page": 1}],
         ids=["id_0"],
     )
@@ -240,7 +245,9 @@ def test_get_sparse_index_stale_refresh_after_ingest(client):
     # ingest de novo chunk na mesma coleção
     store.add_texts(
         texts=["Bula de ibuprofeno para febre."],
-        metadatas=[{"doc_type": "bula", "source_path": "bula_ibuprofeno.pdf", "page": 2}],
+        metadatas=[
+            {"doc_type": "bula", "source_path": "bula_ibuprofeno.pdf", "page": 2}
+        ],
         ids=["id_1"],
     )
 
@@ -260,15 +267,15 @@ def test_get_sparse_index_empty_collection_returns_empty(client):
     assert index.search("dipirona", 5) == []
 
 
-def test_get_sparse_index_build_failure_returns_none_and_logs(
-    client, mocker, caplog
-):
+def test_get_sparse_index_build_failure_returns_none_and_logs(client, mocker, caplog):
     """Falha na construção (collection.get) → None + log, sem propagar."""
     import logging
 
     settings = _settings()
     store = _bula_store(
-        client, settings, ["Bula de dipirona para dor."],
+        client,
+        settings,
+        ["Bula de dipirona para dor."],
         metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf", "page": 1}],
     )
 
@@ -343,9 +350,7 @@ def test_search_orders_by_score_desc(client):
     hits = index.search("dipirona dor", 5)
 
     assert len(hits) == 2
-    assert all(
-        d.page_content.startswith("Bula de dipirona") for d, _ in hits
-    )
+    assert all(d.page_content.startswith("Bula de dipirona") for d, _ in hits)
     assert hits[0][1] >= hits[1][1]
 
 
