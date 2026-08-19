@@ -24,3 +24,6 @@ python-dotenv==1.1.0
 
 # Logging
 python-json-logger==3.3.0
+
+# Hybrid search BM25 (RAG-02)
+rank_bm25==0.2.2
