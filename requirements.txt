@@ -35,3 +35,6 @@ datasets==3.6.0
 
 # Reranking cross-encoder (RAG-01)
 sentence-transformers==3.3.1
+
+# Hybrid search BM25 (RAG-02)
+rank_bm25==0.2.2
