@@ -847,7 +847,13 @@ def test_retrieve_hybrid_both_empty_is_cold_start(client, settings):
 
 
 def test_retrieve_hybrid_lexical_guard_blocks_cross_drug_sparse_hit(client, settings):
-    """Guarda lexical bloqueia chunk esparso de outro fármaco → [] (cold start)."""
+    """Guarda lexical bloqueia hit esparso genuíno de outro fármaco → [].
+
+    A consulta ("...dipirona... febre") compartilha o token "febre" com o chunk
+    de ibuprofeno ("Bula de ibuprofeno para febre."), então o caminho esparso
+    recupera o chunk de verdade; a guarda esvazia o contexto porque a consulta
+    menciona dipirona e o chunk não a contém → cold start [].
+    """
     store = get_vectorstore(DocType.BULA, client, _DivergentEmbeddings(), settings)
     store.add_texts(
         texts=["Bula de ibuprofeno para febre."],
@@ -856,8 +862,20 @@ def test_retrieve_hybrid_lexical_guard_blocks_cross_drug_sparse_hit(client, sett
     )
 
     settings_on = _hybrid_settings()
+
+    # pré-condição: o token "febre" gera um hit esparso genuíno (≠ denso vazio);
+    # sem isso o teste passaria mesmo com a guarda removida/broken
+    from medasist.retrieval.sparse import get_sparse_index
+
+    index = get_sparse_index(store, settings_on)
+    assert index is not None
+    assert index.search(
+        "Qual a dose de dipirona para febre?",
+        settings_on.retrieval_hybrid_sparse_top_k,
+    )
+
     docs = retrieve(
-        "Qual a dose de dipirona para adultos?",
+        "Qual a dose de dipirona para febre?",
         {DocType.BULA: store},
         settings_on,
     )
