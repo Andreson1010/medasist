@@ -12,6 +12,8 @@ from langchain_core.retrievers import BaseRetriever
 
 from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
+from medasist.retrieval.retriever import retrieve, select_collections
+from medasist.retrieval.sparse import reset_sparse_indexes
 from medasist.vectorstore.store import get_vectorstore
 
 # ---------------------------------------------------------------------------
@@ -48,6 +50,14 @@ def client(tmp_path) -> chromadb.ClientAPI:
 @pytest.fixture
 def embeddings() -> _FakeEmbeddings:
     return _FakeEmbeddings()
+
+
+@pytest.fixture(autouse=True)
+def _reset_sparse_indexes():
+    """Zera o cache global do índice esparso antes e depois de cada teste."""
+    reset_sparse_indexes()
+    yield
+    reset_sparse_indexes()
 
 
 @pytest.fixture
@@ -743,3 +753,253 @@ def test_retrieve_all_stores_fail_logs_error_and_returns_empty(caplog, settings)
     assert "failed_stores=['manual']" in message
     assert "chunks=0" in message
     assert "latency_ms=" in message
+
+
+# ---------------------------------------------------------------------------
+# Testes — busca híbrida denso + esparso (RAG-02)
+# ---------------------------------------------------------------------------
+
+
+class _DivergentEmbeddings(Embeddings):
+    """Query vector bem diferente dos docs — distância L2 alta (denso vazio)."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 1.0, 1.0, 1.0] for _ in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return [0.0, 0.0, 0.0, 0.0]
+
+
+def _hybrid_settings(**overrides: object) -> Settings:
+    """Settings com busca híbrida habilitada."""
+    defaults: dict[str, object] = {
+        "retrieval_top_k": 10,
+        "retrieval_score_threshold": 0.4,
+        "retrieval_hybrid_enabled": True,
+        "retrieval_hybrid_rrf_k": 60,
+        "retrieval_hybrid_sparse_top_k": 20,
+    }
+    defaults.update(overrides)
+    return Settings(**defaults)
+
+
+def test_retrieve_hybrid_flag_off_never_builds_sparse_index(mocker, client, settings):
+    """Flag off: retrieve não constrói índice esparso (rank_bm25 não importado)."""
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Alphazol X: indicado para hipertensão arterial sistêmica."],
+        metadatas=[{"doc_type": "bula", "source_path": "alphazol.pdf", "page": 1}],
+        ids=["bula_001"],
+    )
+
+    mock_sparse = mocker.patch("medasist.retrieval.retriever.get_sparse_index")
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+    docs = retrieve("hipertensão", {DocType.BULA: store}, settings_loose)
+
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+    mock_sparse.assert_not_called()
+
+
+def test_retrieve_hybrid_sparse_only_hit_is_not_cold_start(client, settings):
+    """Denso vazio + esparso com hit exato aprovado pela guarda ≠ cold start."""
+    store = get_vectorstore(DocType.BULA, client, _DivergentEmbeddings(), settings)
+    store.add_texts(
+        texts=["Bula de dipirona para dor intensa."],
+        metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf", "page": 2}],
+        ids=["bula_001"],
+    )
+
+    settings_on = _hybrid_settings()
+    docs = retrieve(
+        "Qual a dose de dipirona para adultos?",
+        {DocType.BULA: store},
+        settings_on,
+    )
+
+    assert len(docs) > 0
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+    assert docs[0].metadata["source_path"] == "bula_dipirona.pdf"
+
+
+def test_retrieve_hybrid_both_empty_is_cold_start(client, settings):
+    """Denso vazio E esparso vazio → lista vazia (cold start)."""
+    store = get_vectorstore(DocType.BULA, client, _DivergentEmbeddings(), settings)
+    store.add_texts(
+        texts=["Bula de ibuprofeno para febre."],
+        metadatas=[{"doc_type": "bula", "source_path": "bula_ibuprofeno.pdf"}],
+        ids=["bula_001"],
+    )
+
+    settings_on = _hybrid_settings()
+    docs = retrieve(
+        "Qual a dose de dipirona para adultos?",
+        {DocType.BULA: store},
+        settings_on,
+    )
+
+    assert docs == []
+
+
+def test_retrieve_hybrid_lexical_guard_blocks_cross_drug_sparse_hit(client, settings):
+    """Guarda lexical bloqueia chunk esparso de outro fármaco → [] (cold start)."""
+    store = get_vectorstore(DocType.BULA, client, _DivergentEmbeddings(), settings)
+    store.add_texts(
+        texts=["Bula de ibuprofeno para febre."],
+        metadatas=[{"doc_type": "bula", "source_path": "bula_ibuprofeno.pdf"}],
+        ids=["bula_001"],
+    )
+
+    settings_on = _hybrid_settings()
+    docs = retrieve(
+        "Qual a dose de dipirona para adultos?",
+        {DocType.BULA: store},
+        settings_on,
+    )
+
+    assert docs == []
+
+
+def test_retrieve_hybrid_per_doctype_isolation(client, settings):
+    """doc_types=[BULA] limita candidatos esparsos à coleção de bulas (HYBR-10)."""
+    store_bula = get_vectorstore(
+        DocType.BULA, client, _DivergentEmbeddings(), settings
+    )
+    store_bula.add_texts(
+        texts=["Bula de dipirona para dor intensa."],
+        metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf"}],
+        ids=["bula_001"],
+    )
+    store_manual = get_vectorstore(
+        DocType.MANUAL, client, _DivergentEmbeddings(), settings
+    )
+    store_manual.add_texts(
+        texts=["Manual de dipirona para referência rápida."],
+        metadatas=[{"doc_type": "manual", "source_path": "manual_dipirona.pdf"}],
+        ids=["manual_001"],
+    )
+    stores = {DocType.BULA: store_bula, DocType.MANUAL: store_manual}
+
+    subset = select_collections(stores, [DocType.BULA])
+    settings_on = _hybrid_settings()
+    docs = retrieve("dipirona dor", subset, settings_on)
+
+    assert len(docs) > 0
+    assert all(d.metadata["doc_type"] == "bula" for d in docs)
+
+
+def test_retrieve_hybrid_respects_top_k(client, settings):
+    """Híbrido respeita o corte final em retrieval_top_k."""
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    texts = [f"Bula de dipirona dor seção {i}." for i in range(10)]
+    store.add_texts(
+        texts=texts,
+        metadatas=[{"doc_type": "bula"} for _ in texts],
+        ids=[f"bula_{i:02d}" for i in range(10)],
+    )
+
+    settings_on = _hybrid_settings(retrieval_top_k=3)
+    docs = retrieve("dipirona dor", {DocType.BULA: store}, settings_on)
+
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+    assert len(docs) <= 3
+
+
+def test_retrieve_hybrid_fusion_orders_by_rrf(client, settings):
+    """Híbrido funde denso + esparso por RRF, mantendo contrato list[Document]."""
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Alphazol X: indicado para hipertensão arterial sistêmica."],
+        metadatas=[{"doc_type": "bula", "source_path": "alphazol.pdf", "page": 1}],
+        ids=["bula_001"],
+    )
+
+    settings_on = _hybrid_settings()
+    docs = retrieve("hipertensão Alphazol", {DocType.BULA: store}, settings_on)
+
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+
+
+def test_retrieve_hybrid_sparse_failure_falls_back_to_dense_only(
+    client, mocker, settings
+):
+    """Falha esparsa → dense-only preservado; contexto denso nunca esvaziado."""
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Alphazol X: indicado para hipertensão arterial sistêmica."],
+        metadatas=[{"doc_type": "bula", "source_path": "alphazol.pdf", "page": 1}],
+        ids=["bula_001"],
+    )
+
+    failing_index = MagicMock()
+    failing_index.search.side_effect = RuntimeError("falha na busca esparsa")
+    mocker.patch(
+        "medasist.retrieval.retriever.get_sparse_index",
+        return_value=failing_index,
+    )
+
+    settings_on = _hybrid_settings()
+    docs = retrieve("hipertensão", {DocType.BULA: store}, settings_on)
+
+    assert len(docs) > 0
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+
+
+def test_retrieve_hybrid_logs_additive_candidate_counts(caplog, client, settings):
+    """Log híbrido contém n_dense_candidates/n_sparse_candidates + campos atuais."""
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Alphazol X: indicado para hipertensão arterial sistêmica."],
+        metadatas=[{"doc_type": "bula", "source_path": "alphazol.pdf", "page": 1}],
+        ids=["bula_001"],
+    )
+
+    settings_on = _hybrid_settings()
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("hipertensão Alphazol", {DocType.BULA: store}, settings_on)
+
+    record = _retrieve_record(caplog)
+    assert record is not None
+    message = record.getMessage()
+    assert f"chunks={len(docs)}" in message
+    assert "latency_ms=" in message
+    assert "cold_start=False" in message
+    assert "doc_types=['bula']" in message
+    assert "hybrid=True" in message
+    assert "n_dense_candidates=" in message
+    assert "n_sparse_candidates=" in message
+
+
+def test_retrieve_hybrid_cold_start_logs_additive_fields(caplog, client, settings):
+    """Cold start híbrido loga contagens de candidatos denso/esparso."""
+    store = get_vectorstore(DocType.BULA, client, _DivergentEmbeddings(), settings)
+    store.add_texts(
+        texts=["Bula de ibuprofeno para febre."],
+        metadatas=[{"doc_type": "bula", "source_path": "bula_ibuprofeno.pdf"}],
+        ids=["bula_001"],
+    )
+
+    settings_on = _hybrid_settings()
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve(
+            "Qual a dose de dipirona?",
+            {DocType.BULA: store},
+            settings_on,
+        )
+
+    assert docs == []
+    record = _retrieve_record(caplog)
+    assert record is not None
+    message = record.getMessage()
+    assert "cold_start=True" in message
+    assert "hybrid=True" in message
+    assert "n_dense_candidates=0" in message
+    assert "n_sparse_candidates=" in message
