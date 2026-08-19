@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "description": "Golden set alinhado ao corpus real (Amoxicilina, Ibuprofeno, DM2, Chagas) para avaliacao before/after do reranker (RAG-01). Reference contexts extraidos verbatim do corpus indexado (bulas sem acentos, diretrizes/protocolos com acentos) para garantir match exato no MRR.",
+  "questions": [
+    {
+      "question": "Qual a contraindicacao da Amoxicilina?",
+      "reference_answer": "A Amoxicilina e uma penicilina e nao deve ser administrada a pacientes com historico de hipersensibilidade a antibioticos betalactamicos (p. ex. penicilinas e cefalosporinas).",
+      "reference_contexts": [
+        "A suscetibilidade a Amoxicilina ira variar de acordo com a regiao e com o tempo. Sempre que disponiveis, dados de sensibilidade locais devem ser consultados. Quando necessario, devem ser feitos testes amostragem microbiologica e testes de sensibilidade.\nINFORMACOES ALEM DA BULA: AMOXICILINA\nQUAIS AS CONTRAINDICACOES DO AMOXICILINA?\nA Amoxicilina e uma penicilina e nao deve ser administrada a pacientes com historico de hipersensibilidade a antibioticos betalactamicos (p. ex. penicilinas e cefalosporinas).\nCOMO USAR O AMOXICILINA?\nCOMPRIMIDO"
+      ],
+      "doc_types": [
+        "bula"
+      ],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Como a Amoxicilina deve ser tomada para otimizar a absorcao?",
+      "reference_answer": "Para otimizar a absorcao, a Amoxicilina deve ser administrada no inicio da refeicao. Os comprimidos devem ser engolidos inteiros, sem mastigar, podendo ser partidos pela metade e engolidos sem mastigar; as capsulas devem ser ingeridas inteiras com agua.",
+      "reference_contexts": [
+        "COMO USAR O AMOXICILINA?\nCOMPRIMIDO\nOs comprimidos devem ser engolidos inteiros, sem mastigar. Se necessario, podem ser partidos pela metade e engolidos sem mastigar.\nPara minimizar uma potencial intolerancia gastrintestinal, deve-se administrar o medicamento no inicio da refeicao. A absorcao da Amoxicilina e otimizada quando o paciente ingere o comprimido no inicio da refeicao.\nCAPSULA\nAs capsulas devem ser ingeridas inteiras com agua. Nao devem ser mastigadas.\nSUSPENSAO ORAL\nPREPARO DA SUSPENSAO\nVerifique se o selo esta intacto antes do uso do produto."
+      ],
+      "doc_types": [
+        "bula"
+      ],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Quais as contraindicacoes do Ibuprofeno?",
+      "reference_answer": "Ibuprofeno nao deve ser administrado a pacientes com hipersensibilidade previa ao Ibuprofeno ou a qualquer componente da formulacao, com ulcera peptica ativa, sangramento gastrintestinal, ou em que acido acetilsalicilico, iodeto ou outros antiinflamatorios nao esteroides tenham induzido reacoes alergicas ou anafilaticas. Tambem e contraindicado a menores de 6 meses e na dor perioperatoria de cirurgia de revascularizacao do miocardio (by pass).",
+      "reference_contexts": [
+        "QUAIS AS CONTRAINDICACOES DO IBUPROFENO SOFTCAPS?\nSUSPENSAO ORAL E GOTAS\nIbuprofeno nao devera ser administrado a pacientes com antecedentes de hipersensibilidade previa ao Ibuprofeno ou a qualquer componente da formulacao. Nao utilizar em individuos com ulcera peptica ativa, sangramento gastrintestinal ou em casos em que o acido acetilsalicilico, iodeto e outros antiinflamatorios nao esteroides tenham induzido asma, rinite, urticaria, polipo nasal, angioedema, broncoespasmo e outros sintomas de reacao alergica ou anafilatica.\nNao utilizar Ibuprofeno concomitante com bebidas alcoolicas.",
+        "COMPRIMIDO REVESTIDO / CAPSULA\nIBUPROFENO E CONTRAINDICADO EM:\nPacientes que apresentam hipersensibilidade ao Ibuprofeno, ou a qualquer de seus excipientes. Existe potencial de sensibilidade cruzada com acido acetilsalicilico e outros anti-inflamatorios nao esteroidais (AINEs). Pacientes que apresentam a triade do acido acetilsalicilico (asma bronquica, rinite e intolerancia ao acido acetilsalicilico). Nesses pacientes foram registradas reacoes anafilactoides e reacoes asmaticas fatais.\nNo tratamento da dor perioperatoria de cirurgia de revascularizacao do miocardio (by pass)."
+      ],
+      "doc_types": [
+        "bula"
+      ],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Qual medicamento e a estrategia inicial de escolha para o tratamento do diabete melito tipo 2?",
+      "reference_answer": "A estratégia inicial de escolha do tratamento medicamentoso do DM2 é o cloridrato de metformina em monoterapia, indicada quando não há resposta adequada após 3 meses de mudanças de modo de vida.",
+      "reference_contexts": [
+        "o risco de desfechos microvasculares, como retinopatia, doença renal e neuropatia, além de\nreduzir complicações macrovasculares a longo prazo. Os benefícios são maiores quando o\ntratamento adequado é iniciado precocemente, desde o diagnóstico.\nO tratamento medicamentoso deve ser individualizado, de acordo com as características\ndo paciente, gravidade e evolução da doença90. Para pacientes com diagnóstico há menos de 3\nmeses e sem fator de risco recomenda-se iniciar o tratamento exclusivamente com mudanças de\nmodo de vida, incluindo controle de peso, alimentação adequada e saudável e prática de atividade\nfísica, e avaliar a resposta terapêutica em 3 meses. Se não houver resposta adequada, deve-se iniciar\ncloridrato de metformina em monoterapia91."
+      ],
+      "doc_types": [
+        "diretriz"
+      ],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Em que condicao se considera iniciar terapia de combinacao no diabete tipo 2?",
+      "reference_answer": "Considera-se iniciar terapia de combinação em pacientes com valores de HbA1c maior do que 7,5% ao diagnóstico de DM2, ou na falha ao atingir as metas terapêuticas com metformina em monoterapia (estado glicêmico avaliado após 3 a 6 meses), sendo sugeridas como segunda linha sulfonilureias, iSGLT2 ou insulinas.",
+      "reference_contexts": [
+        "de 32% de desfechos relacionados ao DM2, 36% de mortalidade por todas as causas e 36% menos\ninfarto do miocárdio94.\nAssim, a estratégia inicial de escolha do tratamento medicamentoso é o cloridrato de\nmetformina em monoterapia. Este medicamento pode ser associado a outros hipoglicemiantes, no\ncaso de falha ao atingir as metas terapêuticas (sendo avaliado o estado glicêmico após 3 meses a\n6 meses no máximo)90. Em pacientes com valores de HbA1c maior do que 7,5% ao diagnóstico\nde DM2, pode-se considerar iniciar o tratamento com terapia de combinação, sendo sugerido\ncomo tratamento de segunda linha as sulfonilureias, os iSGLT2 ou as insulinas91. A Figura 2\napresenta o fluxograma de tratamento para indivíduos com idade igual ou maior a 18 anos com\nDM2."
+      ],
+      "doc_types": [
+        "diretriz"
+      ],
+      "profile": "medico",
+      "is_cold_start": false
+    },
+    {
+      "question": "Qual medicamento e usado na doenca de Chagas em casos de resistencia ou intolerancia ao benzonidazol?",
+      "reference_answer": "O nifurtimox é o medicamento utilizado em casos específicos de resistência ou intolerância ao benzonidazol, sendo fornecido pela Secretaria de Vigilância Sanitária do Ministério da Saúde por demanda.",
+      "reference_contexts": [
+        "60 dias (Tabela 6). O nifurtimox tem sido fornecido pela Secretaria de Vigilância Sanitária do\nMinistério da Saúde por demanda em casos específicos de resistência ou intolerância ao\nbenzonidazol (Dias et al., 2016)."
+      ],
+      "doc_types": [
+        "protocolo"
+      ],
+      "profile": "medico",
+      "is_cold_start": false
+    }
+  ]
+}

@@ -141,6 +141,74 @@ class TestParseArgs:
             parse_args(["--doc-types", "nota-fiscal"])
 
 
+class TestPrintReportMrr:
+    def test_report_displays_mrr_when_present(self, capsys) -> None:
+        """RAG-01: o relatório imprime mrr entre as agregadas quando presente."""
+        report = EvaluationReport(
+            aggregates={
+                "context_precision": 0.7,
+                "context_recall": 0.6,
+                "faithfulness": 0.8,
+                "answer_relevancy": 0.75,
+                "mrr": 0.5,
+            },
+            per_question=[
+                QuestionEvalRow(
+                    question="Pergunta 1",
+                    contexts=["ctx"],
+                    answer="Resposta [1]",
+                    is_cold_start=False,
+                    metrics={
+                        "context_precision": 0.7,
+                        "context_recall": 0.6,
+                        "faithfulness": 0.8,
+                        "answer_relevancy": 0.75,
+                        "mrr": 0.5,
+                    },
+                )
+            ],
+            num_questions=1,
+            num_cold_start=0,
+            num_generation_evaluated=1,
+            num_retrieval_evaluated=1,
+        )
+
+        from evaluate_rag import _print_report
+
+        _print_report(report)
+        captured = capsys.readouterr().out
+
+        assert "mrr: 0.5000" in captured
+        assert "mrr=0.5000" in captured
+
+    def test_report_handles_mrr_none(self, capsys) -> None:
+        """mrr ausente (None) é exibido como n/d, sem quebrar o relatório."""
+        report = EvaluationReport(
+            aggregates={"context_precision": None, "mrr": None},
+            per_question=[
+                QuestionEvalRow(
+                    question="Pergunta 1",
+                    contexts=[],
+                    answer="cold",
+                    is_cold_start=True,
+                    metrics={"context_precision": None, "mrr": None},
+                )
+            ],
+            num_questions=1,
+            num_cold_start=1,
+            num_generation_evaluated=0,
+            num_retrieval_evaluated=0,
+        )
+
+        from evaluate_rag import _print_report
+
+        _print_report(report)
+        captured = capsys.readouterr().out
+
+        assert "mrr: n/d" in captured
+        assert "mrr=n/d" in captured
+
+
 class TestMainFailFast:
     def test_invalid_dataset_returns_1(self, mocker: MagicMock) -> None:
         mocker.patch("evaluate_rag.get_settings", return_value=_settings())

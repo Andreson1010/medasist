@@ -125,6 +125,17 @@ class Settings(BaseSettings):
     retrieval_drug_term_min_len : int
         Comprimento mínimo de um termo para ser considerado medicamento na
         guarda lexical (reduz falsos positivos como ``sol`` ou ``am``).
+    retrieval_rerank_enabled : bool
+        Habilita o reranking cross-encoder no funil único ``retrieve``
+        (padrão: ``False`` — comportamento atual preservado até opt-in).
+    retrieval_rerank_model : str
+        Modelo cross-encoder usado no reranking (padrão: ``BAAI/bge-reranker-base``).
+    retrieval_rerank_top_n : int
+        Número máximo de candidatos pontuados pelo reranker por query
+        (padrão: 20, ``gt=0``).
+    retrieval_rerank_batch_size : int
+        Tamanho do lote nas chamadas ``predict`` do cross-encoder
+        (padrão: 16, ``gt=0``).
     medico_temperature : float
         Temperatura do LLM para o perfil MEDICO (padrão: 0.1).
     medico_max_tokens : int
@@ -370,6 +381,10 @@ class Settings(BaseSettings):
     section_heading_min_len: int = Field(default=3)
     section_heading_max_len: int = Field(default=90)
     retrieval_drug_term_min_len: int = Field(default=5)
+    retrieval_rerank_enabled: bool = Field(default=False)
+    retrieval_rerank_model: str = Field(default="BAAI/bge-reranker-base")
+    retrieval_rerank_top_n: int = Field(default=20, gt=0)
+    retrieval_rerank_batch_size: int = Field(default=16, gt=0)
 
     # Avaliação RAG (offline)
     eval_golden_set_path: Path = Field(default=Path("evals/dataset/golden_set.json"))

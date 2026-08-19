@@ -13,6 +13,7 @@ from pydantic import ConfigDict
 
 from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
+from medasist.retrieval.reranker import rerank_documents
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,13 @@ def retrieve(
     # não aparece em nenhum chunk recuperado, trata como cold start em vez de
     # permitir que o LLM alucine a partir de um documento sobre outro fármaco.
     guarded = _lexical_relevance_guard(query, sorted_docs, settings)
+
+    # Rerank (RAG-01): reordena os candidatos guarda-aprovados por score do
+    # cross-encoder, sempre DEPOIS do guarda lexical e ANTES do corte final.
+    # Cold start é decidido pré-rerank no L2 — o rerank nunca esvazia um
+    # contexto já válido, apenas o reordena.
+    if settings.retrieval_rerank_enabled and guarded:
+        guarded = rerank_documents(guarded, query, settings)
 
     top_docs = guarded[:k]
     scores = [score for _, score in top_docs]

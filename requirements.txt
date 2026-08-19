@@ -32,3 +32,6 @@ python-json-logger==3.3.0
 # Avaliação
 ragas==0.2.15
 datasets==3.6.0
+
+# Reranking cross-encoder (RAG-01)
+sentence-transformers==3.3.1

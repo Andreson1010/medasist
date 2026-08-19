@@ -325,6 +325,172 @@ def test_retrieve_with_strict_threshold_filters_all(client, settings):
 
 
 # ---------------------------------------------------------------------------
+# Testes — reranking cross-encoder (RAG-01)
+# ---------------------------------------------------------------------------
+
+
+def _mock_store_with_candidates(candidates: list[tuple[Document, float]]) -> MagicMock:
+    """Store mock cujos candidatos e distâncias L2 são totalmente controlados."""
+    store = MagicMock(spec=Chroma)
+    store.similarity_search_with_score.return_value = candidates
+    return store
+
+
+def test_retrieve_flag_off_returns_l2_identity_and_never_instantiates_model(
+    mocker, client, embeddings, settings
+):
+    """Flag off (default): ordem L2 preservada; rerank_documents/modelo não chamados."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = get_vectorstore(DocType.BULA, client, embeddings, settings)
+    store.add_texts(
+        texts=["Alphazol X: indicado para hipertensão arterial sistêmica."],
+        metadatas=[{"doc_type": "bula", "source": "alphazol.pdf", "page": 1}],
+        ids=["bula_001"],
+    )
+
+    mock_rerank = mocker.patch("medasist.retrieval.retriever.rerank_documents")
+    mock_ce = mocker.patch("sentence_transformers.CrossEncoder")
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+    docs = retrieve("hipertensão", {DocType.BULA: store}, settings_loose)
+
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+    mock_rerank.assert_not_called()
+    mock_ce.assert_not_called()
+
+
+def test_retrieve_flag_on_reorders_by_rerank_score(mocker, settings):
+    """Flag on + CrossEncoder mockado: retrieve retorna docs na ordem do mock."""
+    from medasist.retrieval.retriever import retrieve
+
+    candidates = [
+        (Document(page_content="A", metadata={"doc_type": "bula"}), 0.1),
+        (Document(page_content="B", metadata={"doc_type": "bula"}), 0.2),
+        (Document(page_content="C", metadata={"doc_type": "bula"}), 0.3),
+    ]
+    store = _mock_store_with_candidates(candidates)
+    instance = MagicMock()
+    instance.predict.return_value = [0.1, 0.9, 0.5]  # B > C > A
+    mocker.patch("sentence_transformers.CrossEncoder", return_value=instance)
+
+    settings_on = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=0.4,
+        retrieval_rerank_enabled=True,
+    )
+
+    docs = retrieve("hipertensão", {DocType.BULA: store}, settings_on)
+
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+    assert [d.page_content for d in docs] == ["B", "C", "A"]
+
+
+def test_retrieve_flag_on_respects_retrieval_top_k(mocker, settings):
+    """Flag on: máximo de retrieval_top_k documentos retornados após o rerank."""
+    from medasist.retrieval.retriever import retrieve
+
+    candidates = [
+        (Document(page_content=f"chunk-{i}", metadata={"doc_type": "manual"}), 0.1)
+        for i in range(6)
+    ]
+    store = _mock_store_with_candidates(candidates)
+    instance = MagicMock()
+    instance.predict.return_value = [float(i) for i in range(6)]
+    mocker.patch("sentence_transformers.CrossEncoder", return_value=instance)
+
+    settings_on = Settings(
+        retrieval_top_k=3,
+        retrieval_score_threshold=0.4,
+        retrieval_rerank_enabled=True,
+    )
+
+    docs = retrieve("conteúdo médico", {DocType.MANUAL: store}, settings_on)
+
+    assert len(docs) <= 3
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+
+
+def test_retrieve_cold_start_does_not_call_reranker(mocker, empty_stores, settings):
+    """Cold start (nenhum candidato L2): retorna [] e reranker não é chamado."""
+    from medasist.retrieval.retriever import retrieve
+
+    mock_rerank = mocker.patch("medasist.retrieval.retriever.rerank_documents")
+
+    settings_on = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=0.4,
+        retrieval_rerank_enabled=True,
+    )
+
+    docs = retrieve("qualquer consulta médica", empty_stores, settings_on)
+
+    assert docs == []
+    mock_rerank.assert_not_called()
+
+
+def test_retrieve_lexical_cold_start_does_not_call_reranker(mocker, client, settings):
+    """Cold start lexical: guarda esvazia → retorna [] e reranker não é chamado."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["A dose maxima permitida por dia em adultos e de 640 gotas (3.200mg)."],
+        metadatas=[{"doc_type": "bula", "source": "bula_ibuprofeno.pdf"}],
+        ids=["bula_001"],
+    )
+    mock_rerank = mocker.patch("medasist.retrieval.retriever.rerank_documents")
+
+    settings_on = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+        retrieval_rerank_enabled=True,
+    )
+
+    docs = retrieve(
+        "Qual a dose máxima de dipirona para adultos?",
+        {DocType.BULA: store},
+        settings_on,
+    )
+
+    assert docs == []
+    mock_rerank.assert_not_called()
+
+
+def test_retrieve_flag_on_never_empties_valid_context(mocker, settings):
+    """Rerank nunca transforma não-cold-start em cold start (regra de segurança)."""
+    from medasist.retrieval.retriever import retrieve
+
+    candidates = [
+        (Document(page_content=f"chunk-{i}", metadata={"doc_type": "bula"}), 0.1)
+        for i in range(4)
+    ]
+    store = _mock_store_with_candidates(candidates)
+    instance = MagicMock()
+    # Todos os scores do reranker baixos — mesmo assim o contexto não esvazia
+    instance.predict.return_value = [0.0, 0.0, 0.0, 0.0]
+    mocker.patch("sentence_transformers.CrossEncoder", return_value=instance)
+
+    settings_on = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=0.4,
+        retrieval_rerank_enabled=True,
+    )
+
+    docs = retrieve("hipertensão", {DocType.BULA: store}, settings_on)
+
+    assert len(docs) > 0
+    assert isinstance(docs, list)
+    assert all(isinstance(d, Document) for d in docs)
+
+
+# ---------------------------------------------------------------------------
 # Testes — log de métrica consolidada por query
 # ---------------------------------------------------------------------------
 
