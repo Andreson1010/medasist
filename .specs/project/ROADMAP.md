@@ -128,14 +128,15 @@
 - Subir MRR e Context Precision
 - PR #23 (AD-013)
 
-**RAG-02: Hybrid search (denso + esparso)** - PLANNED
+**RAG-02: Hybrid search (denso + esparso)** - DONE
 - Combinar similarity_search com BM25/keyword
 - Fusão via RRF
 - Crítico para nomes de medicamentos e dosagens exatas
+- PR #24 (AD-014)
 
-**RAG-03: Query transformation** - PLANNED
-- Reescrever/expandir queries curtas antes do retrieval
-- Decomposição de perguntas multi-parte
+**RAG-03: Query transformation** - DONE
+- Reescrever/expandir queries curtas antes do retrieval (sub-feature escolhida; decomposição de multi-parte adiada para o backlog)
+- PR #25 (AD-014)
 
 **RAG-04: Section/page nas citações** - DONE
 - Propagar page_number do PageContent → TextChunk → ChunkMetadata

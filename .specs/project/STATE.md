@@ -1,11 +1,18 @@
 # State
 
-**Last Updated:** 2026-08-19
-**Current Work:** RAG-01 (reranking cross-encoder + MRR, PR #23) concluído e mergeado, abrindo M4. Próximo passo: RAG-02 hybrid search (denso + esparso via BM25 + fusão RRF)
+**Last Updated:** 2026-08-20
+**Current Work:** RAG-03 Query transformation — sub-feature **rewrite/expand de queries curtas antes do retrieval** concluída e mergeada (PR #25, rebase + fast-forward, commits `5455567`/`152f7d6`/`7624995`). Decomposição de perguntas multi-parte segue **adiada** (backlog). Próximo passo: decidir entre RAG-05 (streaming SSE) e demais itens do M4/backlog.
 
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-014: RAG-03 — sub-feature rewrite/expand de queries curtas (2026-08-20)
+
+**Decision:** Implementar RAG-03 como **rewrite/expand de queries curtas** antes do retrieval (expansão com LLM local via LM Studio), e **adiar** a decomposição de perguntas multi-parte para o backlog. Uma query de expansão `prompt | llm | StrOutputParser` reescreve a pergunta em forma completa com contexto médico quando ela é curta/ambígua (heurística de comprimento); queries já completas passam pelo sistema sem chamada extra ao LLM. Query transformada alimenta o funil de retrieval (híbrido + guarda lexical + rerank), mantendo a resposta/citações ancoradas na pergunta original. Falha/ausência do LLM → fallback para a query original (degradação graciosa, nunca quebra a consulta). Configs em `Settings` com flags e thresholds (`retrieval_query_rewrite_enabled`, `retrieval_query_rewrite_min_len`, `retrieval_query_rewrite_model`).
+**Reason:** Queries curtas ("dose dipirona", "interação com álcool") geram embeddings de má qualidade e retrieval impreciso; a decomposição multi-parte é bem mais complexa (split + merge + re-composição) e menos comum no uso típico. Expandir antes do retrieval complementa RAG-01/02/04.
+**Trade-off:** Chamada extra ao LLM por query curta (latência/custo local); sem custo para queries longas. Decomposição de multi-parte adiada.
+**Impact:** `config.py`, novo módulo de transformação de query (provável `retrieval/query_transform.py`), `retrieval/retriever.py` (hook de transformação pré-retrieval), `generation/chain.py` (pipeline `run_query`), `.env.example`, `.specs/features/rag-03-query-rewrite/`, testes. Backlog: decomposição multi-parte.
 
 ### AD-013: Reranking cross-encoder + MRR no eval (RAG-01) (2026-08-19)
 
@@ -166,6 +173,7 @@ Nenhum blocker ativo.
 | 015 | OBS-04: retry/backoff para LM Studio (PR #21) | 2026-08-18 | Done |
 | 016 | RAG-04: citações com página/seção + guarda lexical (PR #22) | 2026-08-18 | Done |
 | 017 | RAG-01: reranking cross-encoder + MRR (PR #23) | 2026-08-19 | Done |
+| 018 | RAG-03: reescrita/expansão de consultas curtas (PR #25) | 2026-08-20 | Done |
 
 ---
 
@@ -190,9 +198,11 @@ Nenhum blocker ativo.
 - [x] OBS-04: retry/backoff para LM Studio (AD-012) — PR #21 merged
 - [x] RAG-04: citações com página/seção + guarda lexical (AD-012) — PR #22 merged
 - [x] RAG-01: reranking cross-encoder + MRR (AD-013) — PR #23 merged
+- [x] RAG-03: rewrite/expand de consultas curtas (AD-014) — PR #25 merged
 
 ---
 
 ## Preferences
 
 **Model Guidance Shown:** never
+**Merge strategy:** rebase + fast-forward (não squash, não merge commit) — preserva os commits atômicos da branch no `main` para permitir revisão individual de cada commit, sem poluir o histórico com merge commits (alinhado à skill `git-workflow`: "Merging instead of rebasing" é anti-pattern). Decidido após RAG-02 (que foi squash). Aplicar nas próximas features.
