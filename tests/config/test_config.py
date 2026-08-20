@@ -290,6 +290,113 @@ class TestSettingsHybridSearch:
         assert settings.retrieval_sparse_stopwords == ("de", "a", "para")
 
 
+class TestSettingsQueryRewrite:
+    def test_defaults_are_set(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.retrieval_query_rewrite_enabled is False
+        assert settings.retrieval_query_rewrite_min_length == 3
+        assert settings.retrieval_query_rewrite_model == settings.lm_studio_llm_model
+        assert settings.retrieval_query_rewrite_temperature == 0.0
+        assert settings.retrieval_query_rewrite_max_tokens == 128
+        assert settings.retrieval_query_rewrite_max_output == 200
+
+    def test_empty_model_resolves_to_lm_studio_model(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            lm_studio_llm_model="phi-3-mini",
+            retrieval_query_rewrite_model="",
+        )
+        assert settings.retrieval_query_rewrite_model == "phi-3-mini"
+
+    def test_custom_values_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            retrieval_query_rewrite_enabled=True,
+            retrieval_query_rewrite_min_length=5,
+            retrieval_query_rewrite_model="rewrite-mini",
+            retrieval_query_rewrite_temperature=0.5,
+            retrieval_query_rewrite_max_tokens=64,
+            retrieval_query_rewrite_max_output=150,
+        )
+        assert settings.retrieval_query_rewrite_enabled is True
+        assert settings.retrieval_query_rewrite_min_length == 5
+        assert settings.retrieval_query_rewrite_model == "rewrite-mini"
+        assert settings.retrieval_query_rewrite_temperature == 0.5
+        assert settings.retrieval_query_rewrite_max_tokens == 64
+        assert settings.retrieval_query_rewrite_max_output == 150
+
+    def test_zero_min_length_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_min_length=0,
+            )
+
+    def test_negative_min_length_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_min_length=-1,
+            )
+
+    def test_temperature_below_zero_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_temperature=-0.1,
+            )
+
+    def test_temperature_above_two_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_temperature=2.1,
+            )
+
+    def test_zero_max_tokens_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_max_tokens=0,
+            )
+
+    def test_negative_max_tokens_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_max_tokens=-1,
+            )
+
+    def test_zero_max_output_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_max_output=0,
+            )
+
+    def test_negative_max_output_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                admin_api_key=SecretStr("very-strong-key-0123456789"),
+                retrieval_query_rewrite_max_output=-1,
+            )
+
+    def test_env_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("RETRIEVAL_QUERY_REWRITE_ENABLED", "true")
+        monkeypatch.setenv("RETRIEVAL_QUERY_REWRITE_MIN_LENGTH", "5")
+        monkeypatch.setenv("RETRIEVAL_QUERY_REWRITE_MODEL", "env-rewrite")
+        monkeypatch.setenv("RETRIEVAL_QUERY_REWRITE_TEMPERATURE", "0.4")
+        monkeypatch.setenv("RETRIEVAL_QUERY_REWRITE_MAX_TOKENS", "64")
+        monkeypatch.setenv("RETRIEVAL_QUERY_REWRITE_MAX_OUTPUT", "120")
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.retrieval_query_rewrite_enabled is True
+        assert settings.retrieval_query_rewrite_min_length == 5
+        assert settings.retrieval_query_rewrite_model == "env-rewrite"
+        assert settings.retrieval_query_rewrite_temperature == 0.4
+        assert settings.retrieval_query_rewrite_max_tokens == 64
+        assert settings.retrieval_query_rewrite_max_output == 120
+
+
 class TestSettingsRetryBackoff:
     def test_defaults_are_set(self) -> None:
         settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
