@@ -1019,3 +1019,108 @@ def test_retrieve_hybrid_cold_start_logs_additive_fields(caplog, client, setting
     assert "hybrid=True" in message
     assert "n_dense_candidates=0" in message
     assert "n_sparse_candidates=" in message
+
+
+# ---------------------------------------------------------------------------
+# Testes — reescrita de consulta (RAG-03)
+# ---------------------------------------------------------------------------
+
+
+def test_retrieve_uses_rewritten_query_in_search(mocker, settings):
+    """Com reescrita, o retrieve usa a consulta expandida na busca por similaridade."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = _mock_store_with_candidates(
+        [
+            (
+                Document(
+                    page_content="Bula sobre febre.", metadata={"doc_type": "bula"}
+                ),
+                0.1,
+            )
+        ]
+    )
+    mocker.patch(
+        "medasist.retrieval.retriever.rewrite_query",
+        return_value="Qual a causa da febre em adultos?",
+    )
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+    retrieve("febre", {DocType.BULA: store}, settings_loose)
+
+    store.similarity_search_with_score.assert_called_once_with(
+        "Qual a causa da febre em adultos?", k=10
+    )
+
+
+def test_retrieve_empty_stores_does_not_call_rewrite(mocker, settings):
+    """Stores vazio → cold start [] e a reescrita nunca é chamada (RQ-03-07)."""
+    from medasist.retrieval.retriever import retrieve
+
+    mock_rewrite = mocker.patch("medasist.retrieval.retriever.rewrite_query")
+
+    docs = retrieve("dipirona", {}, settings)
+
+    assert docs == []
+    mock_rewrite.assert_not_called()
+
+
+def test_retrieve_flag_off_uses_original_query_identity(mocker, settings):
+    """Flag off (identidade): a busca usa a consulta original, sem reescrita."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = _mock_store_with_candidates(
+        [
+            (
+                Document(
+                    page_content="Bula sobre febre.", metadata={"doc_type": "bula"}
+                ),
+                0.1,
+            )
+        ]
+    )
+    mocker.patch(
+        "medasist.retrieval.retriever.rewrite_query",
+        side_effect=lambda q, s: q,
+    )
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+    retrieve("febre", {DocType.BULA: store}, settings_loose)
+
+    store.similarity_search_with_score.assert_called_once_with("febre", k=10)
+
+
+def test_retrieve_logs_rewritten_flag_when_rewrite_changes_query(
+    mocker, client, settings, caplog
+):
+    """Log consolidado inclui o campo aditivo rewritten=True quando a query mudou."""
+    from medasist.retrieval.retriever import retrieve
+
+    store = get_vectorstore(DocType.BULA, client, _FakeEmbeddings(), settings)
+    store.add_texts(
+        texts=["Bula de dipirona para dor intensa."],
+        metadatas=[{"doc_type": "bula", "source_path": "bula_dipirona.pdf"}],
+        ids=["bula_001"],
+    )
+    mocker.patch(
+        "medasist.retrieval.retriever.rewrite_query",
+        return_value="Qual a dose de dipirona para adultos?",
+    )
+
+    settings_loose = Settings(
+        retrieval_top_k=10,
+        retrieval_score_threshold=10.0,
+    )
+    with caplog.at_level(logging.INFO, logger="medasist.retrieval.retriever"):
+        docs = retrieve("dipirona", {DocType.BULA: store}, settings_loose)
+
+    assert len(docs) > 0
+    record = _retrieve_record(caplog)
+    assert record is not None
+    assert "rewritten=True" in record.getMessage()
