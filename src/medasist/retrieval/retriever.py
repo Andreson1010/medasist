@@ -13,6 +13,7 @@ from pydantic import ConfigDict
 
 from medasist.config import Settings
 from medasist.ingestion.schemas import DocType
+from medasist.retrieval.query_rewrite import rewrite_query
 from medasist.retrieval.reranker import rerank_documents
 from medasist.retrieval.sparse import get_sparse_index
 
@@ -148,6 +149,20 @@ def retrieve(
         logger.warning("retrieve chamado com stores vazio — cold start.")
         return []
 
+    # Reescrita de consultas curtas (RAG-03): a consulta efetiva (possivelmente
+    # expandida) é usada na busca densa/esparsa, na guarda lexical e no rerank.
+    # A pergunta ORIGINAL (``query``) permanece para o log e para a geração.
+    #
+    # AC7: sem dados para buscar (cold start), a reescrita nunca é chamada e o
+    # retrieve retorna ``[]`` sem consultar o LLM de reescrita.
+    if settings.retrieval_query_rewrite_enabled and not _stores_have_data(stores):
+        logger.info("Cold start: stores sem dados — reescrita de consulta ignorada.")
+        _log_retrieve_metric(query, stores, [], [], 0, failed_stores=[])
+        return []
+
+    effective_query = rewrite_query(query, settings)
+    rewritten = effective_query != query
+
     k = settings.retrieval_top_k
     threshold = settings.retrieval_score_threshold
     start = time.perf_counter()
@@ -157,7 +172,7 @@ def retrieve(
 
     for doc_type, store in stores.items():
         try:
-            results = store.similarity_search_with_score(query, k=k)
+            results = store.similarity_search_with_score(effective_query, k=k)
             logger.debug(
                 "Store '%s': %d resultado(s) para query '%s'",
                 doc_type.value,
@@ -179,7 +194,7 @@ def retrieve(
     # flag está ativa. Cold start é decidido pós-fusão e pós-guarda.
     if settings.retrieval_hybrid_enabled:
         return _retrieve_hybrid(
-            query,
+            effective_query,
             stores,
             settings,
             k,
@@ -187,6 +202,7 @@ def retrieve(
             candidates,
             failed_stores,
             start,
+            rewritten=rewritten,
         )
 
     if not candidates:
@@ -203,7 +219,13 @@ def retrieve(
                 query[:50],
             )
         _log_retrieve_metric(
-            query, stores, [], [], elapsed_ms, failed_stores=failed_stores
+            query,
+            stores,
+            [],
+            [],
+            elapsed_ms,
+            failed_stores=failed_stores,
+            rewritten=rewritten,
         )
         return []
 
@@ -221,14 +243,14 @@ def retrieve(
     # Se a consulta menciona um medicamento (termo com sufixo de droga) que
     # não aparece em nenhum chunk recuperado, trata como cold start em vez de
     # permitir que o LLM alucine a partir de um documento sobre outro fármaco.
-    guarded = _lexical_relevance_guard(query, sorted_docs, settings)
+    guarded = _lexical_relevance_guard(effective_query, sorted_docs, settings)
 
     # Rerank (RAG-01): reordena os candidatos guarda-aprovados por score do
     # cross-encoder, sempre DEPOIS do guarda lexical e ANTES do corte final.
     # Cold start é decidido pré-rerank no L2 — o rerank nunca esvazia um
     # contexto já válido, apenas o reordena.
     if settings.retrieval_rerank_enabled and guarded:
-        guarded = rerank_documents(guarded, query, settings)
+        guarded = rerank_documents(guarded, effective_query, settings)
 
     top_docs = guarded[:k]
     scores = [score for _, score in top_docs]
@@ -236,7 +258,13 @@ def retrieve(
     if not top_docs and sorted_docs:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         _log_retrieve_metric(
-            query, stores, [], [], elapsed_ms, failed_stores=failed_stores
+            query,
+            stores,
+            [],
+            [],
+            elapsed_ms,
+            failed_stores=failed_stores,
+            rewritten=rewritten,
         )
         return []
 
@@ -250,6 +278,7 @@ def retrieve(
         scores,
         elapsed_ms,
         failed_stores=failed_stores,
+        rewritten=rewritten,
     )
     return [doc for doc, _ in top_docs]
 
@@ -334,6 +363,8 @@ def _retrieve_hybrid(
     dense_candidates: list[tuple[Document, float]],
     failed_stores: list[str],
     start: float,
+    *,
+    rewritten: bool = False,
 ) -> list[Document]:
     """Executa o funil híbrido (denso + esparso + RRF) dentro de ``retrieve``.
 
@@ -425,6 +456,7 @@ def _retrieve_hybrid(
             n_dense_candidates=n_dense,
             n_sparse_candidates=n_sparse,
             hybrid=True,
+            rewritten=rewritten,
         )
         return []
 
@@ -442,8 +474,37 @@ def _retrieve_hybrid(
         n_dense_candidates=n_dense,
         n_sparse_candidates=n_sparse,
         hybrid=True,
+        rewritten=rewritten,
     )
     return [doc for doc, _ in top_docs]
+
+
+def _stores_have_data(stores: dict[DocType, Any]) -> bool:
+    """Verifica se pelo menos um store tem documentos para buscar.
+
+    Consulta a contagem da coleção de cada store. Retorna ``True`` na primeira
+    coleção com documentos e ``False`` quando todas estão vazias (cold start).
+    Em falha da checagem, assume ``True`` (não-vazio) para nunca pular busca
+    legítima. Usada para pular a reescrita de consulta em cold start (AC7).
+
+    Parameters
+    ----------
+    stores : dict[DocType, Any]
+        Stores consultadas.
+
+    Returns
+    -------
+    bool
+        ``True`` quando há dados em pelo menos um store.
+    """
+    for store in stores.values():
+        try:
+            if store._collection.count() > 0:
+                return True
+        except Exception:
+            logger.exception("Falha ao checar dados do store — assumindo não-vazio.")
+            return True
+    return False
 
 
 def _lexical_relevance_guard(
@@ -535,6 +596,7 @@ def _log_retrieve_metric(
     n_dense_candidates: int = 0,
     n_sparse_candidates: int = 0,
     hybrid: bool = False,
+    rewritten: bool = False,
 ) -> None:
     """Registra métrica consolidada de retrieval por query.
 
@@ -543,9 +605,10 @@ def _log_retrieve_metric(
     adiciona ``failed_stores``. Quando a busca híbrida está ativa, adiciona os
     campos ``hybrid``, ``n_dense_candidates`` e ``n_sparse_candidates``
     (contagens de candidatos por caminho), preservando os campos existentes —
-    mudança aditiva que não quebra os testes de log atuais. A query é truncada
-    a 50 caracteres (padrão existente do retriever) e nenhum dado de paciente
-    é registrado.
+    mudança aditiva que não quebra os testes de log atuais. Quando a consulta
+    foi reescrita (RAG-03), adiciona ``rewritten=True`` — também aditivo. A
+    query é truncada a 50 caracteres (padrão existente do retriever) e nenhum
+    dado de paciente é registrado.
 
     Parameters
     ----------
@@ -567,6 +630,8 @@ def _log_retrieve_metric(
         Número de candidatos do caminho esparso (apenas híbrido).
     hybrid : bool
         Indica se a métrica é de uma execução híbrida.
+    rewritten : bool
+        Indica se a consulta efetiva usada na busca difere da original.
     """
     message = (
         "retrieve: query='%s' doc_types=%s chunks=%d scores=%s latency_ms=%d "
@@ -586,4 +651,7 @@ def _log_retrieve_metric(
     if failed_stores:
         message += " failed_stores=%s"
         args.append(failed_stores)
+    if rewritten:
+        message += " rewritten=%s"
+        args.append(True)
     logger.info(message, *args)

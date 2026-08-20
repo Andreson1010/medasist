@@ -400,6 +400,14 @@ class Settings(BaseSettings):
     retrieval_rerank_top_n: int = Field(default=20, gt=0)
     retrieval_rerank_batch_size: int = Field(default=16, gt=0)
 
+    # Reescrita de consultas curtas (RAG-03)
+    retrieval_query_rewrite_enabled: bool = Field(default=False)
+    retrieval_query_rewrite_min_length: int = Field(default=3, gt=0)
+    retrieval_query_rewrite_model: str = Field(default="")
+    retrieval_query_rewrite_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    retrieval_query_rewrite_max_tokens: int = Field(default=128, gt=0)
+    retrieval_query_rewrite_max_output: int = Field(default=200, gt=0)
+
     # Busca híbrida (denso + esparso BM25, RAG-02)
     retrieval_hybrid_enabled: bool = Field(default=False)
     retrieval_hybrid_rrf_k: int = Field(default=60, gt=0)
@@ -475,20 +483,24 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_eval_models(self) -> Settings:
-        """Resolve modelos de avaliação vazios para os modelos principais.
+        """Resolve modelos de avaliação e de reescrita vazios para os principais.
 
-        Mantém o default vazio para que a resolução acompanhe ``lm_studio_llm_model``
-        e ``lm_studio_embedding_model`` (sem duplicar o valor do modelo no código).
+        Mantém o default vazio para que a resolução acompanhe
+        ``lm_studio_llm_model`` e ``lm_studio_embedding_model`` (sem duplicar o
+        valor do modelo no código). ``retrieval_query_rewrite_model`` vazio
+        resolve para ``lm_studio_llm_model`` (padrão ``eval_llm_model``).
 
         Returns
         -------
         Settings
-            Instância com ``eval_llm_model``/``eval_embedding_model`` preenchidos.
+            Instância com os modelos vazios preenchidos.
         """
         if not self.eval_llm_model:
             self.eval_llm_model = self.lm_studio_llm_model
         if not self.eval_embedding_model:
             self.eval_embedding_model = self.lm_studio_embedding_model
+        if not self.retrieval_query_rewrite_model:
+            self.retrieval_query_rewrite_model = self.lm_studio_llm_model
         return self
 
     # Chunking — bulas
