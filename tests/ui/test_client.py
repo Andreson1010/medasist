@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -15,6 +16,7 @@ from medasist.ui.client import (
     check_health,
     get_health,
     query,
+    query_stream,
 )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,34 @@ def _mock_client(status_code: int, json_data: dict | None = None):
     mock_instance = MagicMock()
     mock_instance.get.return_value = mock_response
     mock_instance.post.return_value = mock_response
+
+    mock_cls = MagicMock()
+    mock_cls.return_value.__enter__.return_value = mock_instance
+    mock_cls.return_value.__exit__.return_value = False
+    return mock_cls, mock_instance
+
+
+def _sse_data(payload: dict) -> str:
+    """Serializa um payload como linha SSE ``data: {json}``."""
+    return "data: " + json.dumps(payload, ensure_ascii=False)
+
+
+def _mock_stream_client(status_code: int, lines: list[str]):
+    """Retorna mock do httpx.Client.stream como context manager.
+
+    ``lines`` representa o retorno de ``response.iter_lines()``.
+    """
+    mock_response = MagicMock()
+    mock_response.status_code = status_code
+    mock_response.is_success = 200 <= status_code < 300
+    mock_response.iter_lines.return_value = lines
+
+    mock_stream_cm = MagicMock()
+    mock_stream_cm.__enter__.return_value = mock_response
+    mock_stream_cm.__exit__.return_value = False
+
+    mock_instance = MagicMock()
+    mock_instance.stream.return_value = mock_stream_cm
 
     mock_cls = MagicMock()
     mock_cls.return_value.__enter__.return_value = mock_instance
@@ -259,3 +289,160 @@ class TestQueryErrors:
             pytest.raises(RequestTimeoutError),
         ):
             query("Pergunta?", "medico", base_url=base_url)
+
+
+# ---------------------------------------------------------------------------
+# TestQueryStream
+# ---------------------------------------------------------------------------
+
+
+class TestQueryStream:
+    def test_yields_token_events_and_accumulates_deltas(self, base_url: str) -> None:
+        lines = [
+            _sse_data({"type": "token", "delta": "Olá"}),
+            "",
+            _sse_data({"type": "token", "delta": " mundo"}),
+            "",
+            _sse_data({"type": "citations", "citations": []}),
+            "",
+            _sse_data({"type": "disclaimer", "text": "Aviso médico"}),
+            "",
+            _sse_data({"type": "done"}),
+            "",
+        ]
+        mock_cls, _ = _mock_stream_client(200, lines)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            events = list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+        tokens = [e.delta for e in events if e.type == "token"]
+        assert tokens == ["Olá", " mundo"]
+        assert "".join(tokens) == "Olá mundo"
+        assert events[-1].type == "done"
+
+    def test_parses_citations_event(self, base_url: str) -> None:
+        lines = [
+            _sse_data(
+                {
+                    "type": "citations",
+                    "citations": [
+                        {
+                            "index": 1,
+                            "source": "bula_dipirona.pdf",
+                            "section": "Posologia",
+                            "page": "2",
+                        }
+                    ],
+                }
+            ),
+            "",
+        ]
+        mock_cls, _ = _mock_stream_client(200, lines)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            events = list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+        citations_event = next(e for e in events if e.type == "citations")
+        assert citations_event.citations == [
+            CitationResult(1, "bula_dipirona.pdf", "Posologia", "2")
+        ]
+
+    def test_parses_disclaimer_text(self, base_url: str) -> None:
+        lines = [
+            _sse_data({"type": "disclaimer", "text": "Este é o aviso."}),
+            "",
+        ]
+        mock_cls, _ = _mock_stream_client(200, lines)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            events = list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+        disclaimer = next(e for e in events if e.type == "disclaimer")
+        assert disclaimer.text == "Este é o aviso."
+
+    def test_parses_cold_start_message(self, base_url: str) -> None:
+        lines = [
+            _sse_data({"type": "cold_start", "message": "Nenhum documento relevante."}),
+            "",
+            _sse_data({"type": "disclaimer", "text": "Aviso"}),
+            "",
+            _sse_data({"type": "done"}),
+            "",
+        ]
+        mock_cls, _ = _mock_stream_client(200, lines)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            events = list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+        cold = next(e for e in events if e.type == "cold_start")
+        assert cold.message == "Nenhum documento relevante."
+
+    def test_parses_error_message(self, base_url: str) -> None:
+        lines = [
+            _sse_data({"type": "token", "delta": "parcial"}),
+            "",
+            _sse_data({"type": "error", "message": "Erro ao gerar a resposta."}),
+            "",
+        ]
+        mock_cls, _ = _mock_stream_client(200, lines)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            events = list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+        error = next(e for e in events if e.type == "error")
+        assert error.message == "Erro ao gerar a resposta."
+
+    def test_ignores_blank_and_non_data_lines(self, base_url: str) -> None:
+        lines = [
+            "",
+            ": keep-alive comment",
+            _sse_data({"type": "token", "delta": "x"}),
+            "",
+        ]
+        mock_cls, _ = _mock_stream_client(200, lines)
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            events = list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+        assert [e.type for e in events] == ["token"]
+        assert events[0].delta == "x"
+
+    def test_sends_payload_to_stream_endpoint(self, base_url: str) -> None:
+        mock_cls, mock_instance = _mock_stream_client(200, [])
+        with patch("medasist.ui.client.httpx.Client", mock_cls):
+            list(query_stream("Pergunta?", "enfermeiro", ["bula"], base_url=base_url))
+
+        args, kwargs = mock_instance.stream.call_args
+        method, url = args
+        assert method == "POST"
+        assert url.endswith("/query/stream")
+        assert kwargs["json"] == {
+            "question": "Pergunta?",
+            "profile": "enfermeiro",
+            "doc_types": ["bula"],
+        }
+
+    def test_raises_rate_limit_error_on_429(self, base_url: str) -> None:
+        mock_cls, _ = _mock_stream_client(429, [])
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(RateLimitError),
+        ):
+            list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+    def test_raises_server_error_on_500(self, base_url: str) -> None:
+        mock_cls, _ = _mock_stream_client(500, [])
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(ServerError),
+        ):
+            list(query_stream("Pergunta?", "medico", base_url=base_url))
+
+    def test_raises_timeout_error_on_timeout(self, base_url: str) -> None:
+        mock_cls = MagicMock()
+        mock_stream_cm = MagicMock()
+        mock_stream_cm.__enter__.side_effect = httpx.TimeoutException("timeout")
+        mock_stream_cm.__exit__.return_value = False
+        mock_instance = MagicMock()
+        mock_instance.stream.return_value = mock_stream_cm
+        mock_cls.return_value.__enter__.return_value = mock_instance
+        mock_cls.return_value.__exit__.return_value = False
+        with (
+            patch("medasist.ui.client.httpx.Client", mock_cls),
+            pytest.raises(RequestTimeoutError),
+        ):
+            list(query_stream("Pergunta?", "medico", base_url=base_url))
