@@ -397,6 +397,22 @@ class TestSettingsQueryRewrite:
         assert settings.retrieval_query_rewrite_max_output == 120
 
 
+class TestSettingsGenerationStreaming:
+    def test_default_is_false(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.generation_streaming_enabled is False
+
+    def test_env_override_true(self, monkeypatch) -> None:
+        monkeypatch.setenv("GENERATION_STREAMING_ENABLED", "true")
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.generation_streaming_enabled is True
+
+    def test_env_override_false(self, monkeypatch) -> None:
+        monkeypatch.setenv("GENERATION_STREAMING_ENABLED", "false")
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.generation_streaming_enabled is False
+
+
 class TestSettingsRetryBackoff:
     def test_defaults_are_set(self) -> None:
         settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))

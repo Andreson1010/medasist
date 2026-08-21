@@ -32,6 +32,21 @@ def _cleanup_logging_state() -> None:
     root.setLevel(original_level)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    """Zera o storage do slowapi antes de cada teste.
+
+    O limiter usa storage em memória compartilhado entre testes. Com o rate
+    limit efetivamente ativo (CRIT-01), testes que fazem várias requisições a
+    /query e /query/stream ultrapassariam o limite de 10/min acumulado entre
+    testes. Zerar o storage a cada teste isola o contador por teste.
+    """
+    from medasist.api.deps import limiter
+
+    limiter.reset()
+    yield
+
+
 @pytest.fixture()
 def settings() -> Settings:
     """Settings com valores de teste (sem .env real)."""
