@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 
-from medasist.generation.chain import GenerationResult, _format_context, run_query
+from medasist.generation.chain import (
+    GenerationResult,
+    _format_context,
+    build_stream_chain,
+    run_query,
+    stream_answer,
+)
 from medasist.generation.citations import CitationItem
 from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile
@@ -378,3 +386,219 @@ class TestRunQueryNormal:
             max_retries=4,
             request_timeout=90.0,
         )
+
+
+# ---------------------------------------------------------------------------
+# stream_answer
+# ---------------------------------------------------------------------------
+
+
+def _make_stream_llm(*deltas: str) -> RunnableLambda:
+    """LLM fake que ``stream`` yield os deltas informados.
+
+    ``RunnableLambda`` envolvendo um gerador funciona corretamente na
+    composição ``prompt | llm | StrOutputParser`` ao chamar ``.stream``.
+    """
+
+    def fake_stream(input, config=None, **kwargs):  # type: ignore[no-untyped-def]
+        yield from deltas
+
+    return RunnableLambda(fake_stream)
+
+
+def _consume(gen: Any) -> tuple[list[str], tuple[list[CitationItem], bool]]:
+    """Consome um gerador de ``stream_answer`` até o estado terminal.
+
+    Returns
+    -------
+    tuple[list[str], tuple[list[CitationItem], bool]]
+        ``(deltas, terminal)`` onde ``terminal`` é o valor de retorno do gerador.
+    """
+    deltas: list[str] = []
+    terminal = ([], True)
+    while True:
+        try:
+            deltas.append(next(gen))
+        except StopIteration as stop:
+            terminal = stop.value
+            break
+    return deltas, terminal
+
+
+class TestStreamAnswer:
+    def test_deltas_concatenate_to_answer(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = [_make_doc("texto relevante")]
+            mock_rb.return_value = mock_retriever
+            mock_llm_cls.return_value = _make_stream_llm("Olá", " ", "mundo [1].")
+
+            gen = stream_answer("qual a dose?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        assert "".join(deltas) == "Olá mundo [1]."
+        assert is_cold_start is False
+        assert len(citations) == 1
+        assert isinstance(citations[0], CitationItem)
+
+    def test_profile_respected_in_chatopenai_params(self) -> None:
+        settings = _make_settings()
+        settings.enfermeiro_temperature = 0.15
+        settings.enfermeiro_max_tokens = 1024
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = [_make_doc("texto [1]")]
+            mock_rb.return_value = mock_retriever
+            mock_llm_cls.return_value = _make_stream_llm("Resposta [1].")
+
+            gen = stream_answer(
+                "qual a dose?", stores, UserProfile.ENFERMEIRO, settings
+            )
+            _consume(gen)
+
+        mock_llm_cls.assert_called_once_with(
+            base_url="http://localhost:1234/v1",
+            api_key="lm-studio",
+            model="phi-3-mini",
+            temperature=0.15,
+            max_tokens=1024,
+            max_retries=2,
+            request_timeout=60.0,
+        )
+
+    def test_cold_start_no_deltas_and_no_llm(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = []
+            mock_rb.return_value = mock_retriever
+
+            gen = stream_answer("qual a dose?", stores, UserProfile.MEDICO, settings)
+            deltas, terminal = _consume(gen)
+
+        assert deltas == []
+        assert terminal == ([], True)
+        mock_llm_cls.assert_not_called()
+
+    def test_no_valid_citations_returns_cold_start(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = [_make_doc("texto [1]")]
+            mock_rb.return_value = mock_retriever
+            mock_llm_cls.return_value = _make_stream_llm("Resposta sem marcador.")
+
+            gen = stream_answer("qual a dose?", stores, UserProfile.MEDICO, settings)
+            deltas, terminal = _consume(gen)
+
+        assert deltas == ["Resposta sem marcador."]
+        assert terminal == ([], True)
+
+    def test_doc_types_passed_to_select_collections(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.select_collections") as mock_sel,
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = []
+            mock_rb.return_value = mock_retriever
+            mock_sel.return_value = {}
+
+            gen = stream_answer(
+                "qual a dose?",
+                stores,
+                UserProfile.MEDICO,
+                settings,
+                doc_types=[DocType.BULA, DocType.PROTOCOLO],
+            )
+            _consume(gen)
+
+        mock_sel.assert_called_once_with(stores, [DocType.BULA, DocType.PROTOCOLO])
+
+    def test_stream_exception_propagates(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        def boom(input, config=None, **kwargs):  # type: ignore[no-untyped-def]
+            raise RuntimeError("LM Studio indisponível")
+            yield  # pragma: no cover
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = [_make_doc("texto [1]")]
+            mock_rb.return_value = mock_retriever
+            mock_llm_cls.return_value = RunnableLambda(boom)
+
+            gen = stream_answer("qual a dose?", stores, UserProfile.MEDICO, settings)
+
+            with pytest.raises(RuntimeError):
+                _consume(gen)
+
+
+class TestBuildStreamChain:
+    def test_returns_callable_delegating_to_stream_answer(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = [_make_doc("texto [1]")]
+            mock_rb.return_value = mock_retriever
+            mock_llm_cls.return_value = _make_stream_llm("Resposta [1].")
+
+            stream = build_stream_chain(stores, UserProfile.MEDICO, settings)
+            gen = stream("qual a dose?")
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        assert "".join(deltas) == "Resposta [1]."
+        assert is_cold_start is False
+        assert len(citations) == 1
+
+    def test_closure_passes_doc_types(self) -> None:
+        settings = _make_settings()
+        stores = MagicMock()
+
+        with (
+            patch("medasist.generation.chain.select_collections") as mock_sel,
+            patch("medasist.generation.chain.build_retriever") as mock_rb,
+        ):
+            mock_retriever = MagicMock()
+            mock_retriever.invoke.return_value = []
+            mock_rb.return_value = mock_retriever
+            mock_sel.return_value = {}
+
+            stream = build_stream_chain(stores, UserProfile.MEDICO, settings)
+            gen = stream("qual a dose?", doc_types=[DocType.BULA])
+            _consume(gen)
+
+        mock_sel.assert_called_once_with(stores, [DocType.BULA])
