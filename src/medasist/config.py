@@ -535,6 +535,12 @@ class Settings(BaseSettings):
     paciente_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     paciente_max_tokens: int = Field(default=512, gt=0)
 
+    # Generation
+    # Streaming de respostas via SSE (RAG-05). Off por padrão: quando
+    # desabilitado, POST /query permanece byte-identical e /query/stream
+    # responde 404.
+    generation_streaming_enabled: bool = Field(default=False)
+
     # Textos fixos de segurança
     disclaimer: str = Field(
         default=(
