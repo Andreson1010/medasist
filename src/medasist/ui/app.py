@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from dataclasses import dataclass
 
 import streamlit as st
 
@@ -9,12 +11,15 @@ from medasist.logging_setup import configure_logging
 from medasist.ui.client import (
     APIError,
     CitationResult,
+    NotFoundError,
     QueryResult,
     RateLimitError,
     RequestTimeoutError,
     ServerError,
+    StreamEvent,
     get_health,
     query,
+    query_stream,
 )
 
 logger = logging.getLogger(__name__)
@@ -251,6 +256,196 @@ def _handle_error(exc: APIError) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Streaming (SSE) helpers
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _StreamState:
+    """Estado acumulado durante o consumo de um stream SSE.
+
+    Attributes
+    ----------
+    answer : str
+        Resposta completa acumulada a partir dos deltas.
+    citations : list[CitationResult] | None
+        Citações recebidas no evento ``citations``.
+    disclaimer : str | None
+        Texto do disclaimer recebido.
+    is_cold_start : bool
+        True quando o evento ``cold_start`` foi recebido.
+    error : str | None
+        Mensagem de erro recebida (evento ``error`` terminal).
+    done : bool
+        True quando o evento ``done`` foi recebido.
+    """
+
+    answer: str = ""
+    citations: list[CitationResult] | None = None
+    disclaimer: str | None = None
+    is_cold_start: bool = False
+    error: str | None = None
+    done: bool = False
+
+
+def _delta_generator(
+    events: Iterator[StreamEvent], state: _StreamState
+) -> Iterator[str]:
+    """Consome os eventos do stream, acumulando o estado e yieldando deltas.
+
+    Os eventos ``token`` são repassados a ``st.write_stream`` (yield do delta)
+    e acumulados em ``state.answer``. Os demais eventos (terminais) apenas
+    atualizam o estado por closure, sem serem renderizados.
+
+    Parameters
+    ----------
+    events : Iterator[StreamEvent]
+        Iterador de eventos tipados do client.
+    state : _StreamState
+        Estado acumulado, mutado ao longo do consumo.
+
+    Yields
+    ------
+    str
+        Cada delta de um evento ``token``, para renderização incremental.
+    """
+    for event in events:
+        if event.type == "token":
+            state.answer += event.delta or ""
+            yield event.delta or ""
+        elif event.type == "citations":
+            state.citations = event.citations
+        elif event.type == "disclaimer":
+            state.disclaimer = event.text
+        elif event.type == "cold_start":
+            state.is_cold_start = True
+        elif event.type == "error":
+            state.error = event.message
+        elif event.type == "done":
+            state.done = True
+
+
+def _build_stream_result(
+    state: _StreamState, profile: str, settings: Settings
+) -> QueryResult | None:
+    """Reconstrói um ``QueryResult`` a partir do estado terminal do stream.
+
+    Só persiste resposta em sucesso (evento ``done`` sem erro e sem cold
+    start). Em ``error``, ``cold_start`` ou stream incompleto, retorna ``None``
+    para que a UI descarte o parcial.
+
+    Parameters
+    ----------
+    state : _StreamState
+        Estado acumulado durante o stream.
+    profile : str
+        Perfil de usuário utilizado na consulta.
+    settings : Settings
+        Configurações com o disclaimer médico.
+
+    Returns
+    -------
+    QueryResult | None
+        Resultado persistível em sucesso, ou ``None`` caso contrário.
+    """
+    if state.error is not None or state.is_cold_start or not state.done:
+        return None
+    return QueryResult(
+        answer=state.answer,
+        citations=state.citations or [],
+        profile=profile,
+        disclaimer=state.disclaimer or settings.disclaimer,
+        is_cold_start=False,
+    )
+
+
+def _persist_assistant(result: QueryResult) -> None:
+    """Adiciona uma resposta de assistente ao histórico da sessão.
+
+    Parameters
+    ----------
+    result : QueryResult
+        Resultado a persistir no histórico.
+    """
+    st.session_state[_KEY_MESSAGES].append(
+        {
+            "role": "assistant",
+            "content": result.answer,
+            "result": result,
+        }
+    )
+
+
+def _render_streaming(
+    question: str,
+    profile: str,
+    doc_types: list[str] | None,
+    settings: Settings,
+) -> None:
+    """Renderiza a resposta incrementalmente via ``st.write_stream``.
+
+    Consome ``query_stream`` num gerador que acumula a resposta e captura os
+    eventos terminais por closure. Ao concluir, decide pelo estado terminal:
+    sucesso → renderiza citações + disclaimer e persiste o ``QueryResult``;
+    ``cold_start`` → descarta o texto e mostra a mensagem fixa + disclaimer;
+    ``error`` → não persiste o parcial. Se o backend responder 404 (flag
+    divergente), degrada para o caminho não-streaming ``/query``.
+
+    Parameters
+    ----------
+    question : str
+        Pergunta do usuário.
+    profile : str
+        Perfil de usuário.
+    doc_types : list[str] | None
+        Filtro opcional por tipo de documento.
+    settings : Settings
+        Configurações com mensagens de segurança e timeout.
+    """
+    state = _StreamState()
+
+    try:
+        events = query_stream(
+            question=question,
+            profile=profile,
+            doc_types=doc_types,
+            base_url=settings.api_base_url,
+            timeout=settings.ui_request_timeout,
+        )
+        st.write_stream(_delta_generator(events, state))
+    except NotFoundError:
+        # Backend com streaming desabilitado: degrada para /query.
+        result = query(
+            question=question,
+            profile=profile,
+            doc_types=doc_types,
+            base_url=settings.api_base_url,
+            timeout=settings.ui_request_timeout,
+        )
+        _render_response(result, settings)
+        _persist_assistant(result)
+        return
+    except APIError as exc:
+        _handle_error(exc)
+        return
+
+    result = _build_stream_result(state, profile, settings)
+    if result is None:
+        if state.error is not None:
+            st.error(
+                "Erro ao gerar a resposta. Tente novamente em alguns instantes.",
+                icon="🔴",
+            )
+        elif state.is_cold_start:
+            st.warning(settings.cold_start_message, icon="🔍")
+            st.info(state.disclaimer or settings.disclaimer, icon="ℹ️")
+        return
+
+    _render_response(result, settings)
+    _persist_assistant(result)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -292,26 +487,29 @@ def main() -> None:
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            with st.chat_message("assistant"), st.spinner("Consultando..."):
-                try:
-                    result = query(
+            with st.chat_message("assistant"):
+                if settings.generation_streaming_enabled:
+                    _render_streaming(
                         question=prompt,
                         profile=profile_key,
                         doc_types=doc_type_keys or None,
-                        base_url=settings.api_base_url,
-                        timeout=settings.ui_request_timeout,
+                        settings=settings,
                     )
-                    _render_response(result, settings)
-                    st.session_state[_KEY_MESSAGES].append(
-                        {
-                            "role": "assistant",
-                            "content": result.answer,
-                            "result": result,
-                        }
-                    )
+                else:
+                    with st.spinner("Consultando..."):
+                        try:
+                            result = query(
+                                question=prompt,
+                                profile=profile_key,
+                                doc_types=doc_type_keys or None,
+                                base_url=settings.api_base_url,
+                                timeout=settings.ui_request_timeout,
+                            )
+                            _render_response(result, settings)
+                            _persist_assistant(result)
 
-                except APIError as exc:
-                    _handle_error(exc)
+                        except APIError as exc:
+                            _handle_error(exc)
 
 
 if __name__ == "__main__":

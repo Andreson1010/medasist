@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import httpx
@@ -27,6 +29,10 @@ class RateLimitError(APIError):
 
 class ServerError(APIError):
     """HTTP 5xx — erro interno do servidor."""
+
+
+class NotFoundError(APIError):
+    """HTTP 404 — recurso não encontrado (ex: streaming desabilitado)."""
 
 
 class RequestTimeoutError(APIError):
@@ -83,6 +89,32 @@ class QueryResult:
     profile: str
     disclaimer: str
     is_cold_start: bool
+
+
+@dataclass(frozen=True)
+class StreamEvent:
+    """Evento tipado de um stream SSE do ``POST /query/stream``.
+
+    Attributes
+    ----------
+    type : str
+        Tipo do evento: ``token``, ``citations``, ``disclaimer``,
+        ``cold_start``, ``error`` ou ``done``.
+    delta : str | None
+        Texto parcial do LLM (presente em eventos ``token``).
+    citations : list[CitationResult] | None
+        Citações validadas (presente em eventos ``citations``).
+    message : str | None
+        Mensagem (presente em eventos ``cold_start`` e ``error``).
+    text : str | None
+        Texto avulso (presente em eventos ``disclaimer``).
+    """
+
+    type: str
+    delta: str | None = None
+    citations: list[CitationResult] | None = None
+    message: str | None = None
+    text: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -218,3 +250,126 @@ def query(
         disclaimer=data["disclaimer"],
         is_cold_start=data["is_cold_start"],
     )
+
+
+def _parse_sse_line(line: str) -> StreamEvent | None:
+    """Converte uma linha ``data: {json}`` em um ``StreamEvent``.
+
+    Linhas sem o prefixo ``data:`` (ex: vazias, comentários) são ignoradas.
+
+    Parameters
+    ----------
+    line : str
+        Linha do corpo da resposta SSE.
+
+    Returns
+    -------
+    StreamEvent | None
+        Evento tipado correspondente, ou ``None`` se a linha não é ``data:``.
+    """
+    stripped = line.strip()
+    if not stripped.startswith("data:"):
+        return None
+    payload = json.loads(stripped[len("data:") :].strip())
+
+    citations = None
+    if payload.get("citations") is not None:
+        citations = [
+            CitationResult(
+                index=c["index"],
+                source=c["source"],
+                section=c["section"],
+                page=c["page"],
+            )
+            for c in payload["citations"]
+        ]
+
+    return StreamEvent(
+        type=payload.get("type", ""),
+        delta=payload.get("delta"),
+        citations=citations,
+        message=payload.get("message"),
+        text=payload.get("text"),
+    )
+
+
+def query_stream(
+    question: str,
+    profile: str,
+    doc_types: list[str] | None = None,
+    base_url: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> Iterator[StreamEvent]:
+    """Consome o stream SSE do ``POST /query/stream``, evento a evento.
+
+    Lê as linhas ``data: {json}`` da resposta e as converte em ``StreamEvent``
+    tipados, tratando 429/5xx como as demais chamadas do client. Usada quando
+    ``generation_streaming_enabled=True``; quando o backend responde 404 (flag
+    divergente), levanta ``NotFoundError`` para a UI degradar para ``/query``.
+
+    Parameters
+    ----------
+    question : str
+        Pergunta do usuário (máx. 500 caracteres).
+    profile : str
+        Valor do enum ``UserProfile`` (ex: ``"medico"``).
+    doc_types : list[str] | None
+        Filtro opcional por tipo de documento.
+    base_url : str | None
+        URL base da API. Usa ``settings.api_base_url`` por padrão.
+    timeout : float
+        Tempo limite da requisição em segundos.
+
+    Yields
+    ------
+    StreamEvent
+        Cada evento tipado do stream (token, citations, disclaimer, etc.).
+
+    Raises
+    ------
+    RateLimitError
+        Quando a API retorna HTTP 429.
+    ServerError
+        Quando a API retorna HTTP 5xx.
+    NotFoundError
+        Quando a API retorna HTTP 404 (streaming desabilitado).
+    RequestTimeoutError
+        Quando a requisição excede ``timeout`` segundos.
+    APIError
+        Para qualquer outro status não-2xx.
+    """
+    url = (base_url or get_settings().api_base_url).rstrip("/")
+    payload: dict = {
+        "question": question,
+        "profile": profile,
+        "doc_types": doc_types,
+    }
+
+    logger.debug("POST %s/query/stream profile=%s", url, profile)
+
+    try:
+        with (
+            httpx.Client(timeout=timeout) as client,
+            client.stream("POST", f"{url}/query/stream", json=payload) as response,
+        ):
+            if response.status_code == 429:
+                raise RateLimitError(
+                    "Limite de requisições atingido. Aguarde um momento."
+                )
+            if response.status_code == 404:
+                raise NotFoundError("Streaming de resposta desabilitado no servidor.")
+            if response.status_code >= 500:
+                logger.warning("Erro do servidor: HTTP %d", response.status_code)
+                raise ServerError(
+                    f"Erro interno do servidor (HTTP {response.status_code})."
+                )
+            if not response.is_success:
+                logger.warning("Resposta inesperada: HTTP %d", response.status_code)
+                raise APIError(f"Erro na requisição (HTTP {response.status_code}).")
+
+            for line in response.iter_lines():
+                event = _parse_sse_line(line)
+                if event is not None:
+                    yield event
+    except httpx.TimeoutException as exc:
+        raise RequestTimeoutError("A API não respondeu a tempo.") from exc
