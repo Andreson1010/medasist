@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 from medasist.api.schemas import DependencyHealth, DependencyStatus
 from medasist.generation.chain import GenerationResult
 from medasist.generation.citations import CitationItem
+from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile
 
 
@@ -89,6 +91,141 @@ def client(mock_chain: MagicMock) -> Generator[TestClient, None, None]:
 
         with TestClient(app) as c:
             yield c
+
+
+def _make_stream_chain(
+    deltas: tuple[str, ...] = ("Olá", " ", "mundo [1]."),
+    citations: list[CitationItem] | None = None,
+    is_cold_start: bool = False,
+) -> MagicMock:
+    """Chain streamada mockada que yield os deltas e retorna o estado terminal.
+
+    Retorna um ``MagicMock`` cuja chamada ``chain(question, doc_types)`` produz
+    um gerador que yield ``deltas`` e retorna ``(citations, is_cold_start)``
+    (estado terminal do gerador).
+    """
+    chain = MagicMock()
+    valid_citations = (
+        citations
+        if citations is not None
+        else [
+            CitationItem(
+                index=1, source="bula_amoxicilina.pdf", section="Posologia", page="3"
+            )
+        ]
+    )
+
+    def _call(question: str, doc_types: list[DocType] | None = None) -> Generator:
+        def gen() -> Generator:
+            yield from deltas
+            return valid_citations, is_cold_start
+
+        return gen()
+
+    chain.side_effect = _call
+    return chain
+
+
+@pytest.fixture()
+def streaming_chain() -> MagicMock:
+    """Chain streamada que yield deltas e termina com citações válidas."""
+    return _make_stream_chain()
+
+
+@pytest.fixture()
+def cold_start_streaming_chain() -> MagicMock:
+    """Chain streamada que decide cold start (sem tokens)."""
+    return _make_stream_chain(deltas=(), is_cold_start=True)
+
+
+@pytest.fixture()
+def no_citation_streaming_chain() -> MagicMock:
+    """Chain streamada cuja resposta não tem citações válidas."""
+    return _make_stream_chain(
+        deltas=("Resposta sem marcador de citação.",),
+        citations=[],
+        is_cold_start=True,
+    )
+
+
+def _streaming_settings() -> MagicMock:
+    """Settings mockados com a flag de streaming ativa e textos de segurança."""
+    settings = MagicMock()
+    settings.generation_streaming_enabled = True
+    settings.cold_start_message = "Não encontrei essa informação."
+    settings.disclaimer = "Este sistema é um auxiliar informativo."
+    return settings
+
+
+@pytest.fixture()
+def streaming_client(
+    streaming_chain: MagicMock,
+) -> Generator[TestClient, None, None]:
+    """TestClient com flag de streaming ativa e chain streamada mockada."""
+    streaming_chains = dict.fromkeys(UserProfile, streaming_chain)
+
+    with (
+        patch("medasist.api.main.get_all_vectorstores", return_value={}),
+        patch("medasist.api.main.build_chain", return_value=MagicMock()),
+        patch(
+            "medasist.api.main.build_stream_chain",
+            side_effect=lambda stores, profile, settings: streaming_chains[profile],
+        ),
+        patch(
+            "medasist.api.routers.query.get_settings",
+            return_value=_streaming_settings(),
+        ),
+        patch(
+            "medasist.api.health.check_chromadb",
+            return_value=_healthy_dependency(),
+        ),
+        patch(
+            "medasist.api.health.check_lm_studio",
+            return_value=_healthy_dependency(),
+        ),
+    ):
+        from medasist.api.main import app
+
+        with TestClient(app) as c:
+            yield c
+
+
+@pytest.fixture()
+def streaming_client_factory() -> Callable[..., Generator[TestClient, None, None]]:
+    """Fábrica de TestClient de streaming com chains customizadas.
+
+    Uso: ``with streaming_client_factory(chains) as c:`` onde ``chains`` é um
+    mapeamento ``UserProfile → chain streamada mockada``.
+    """
+
+    @contextmanager
+    def _factory(chains: dict) -> Generator[TestClient, None, None]:
+        with (
+            patch("medasist.api.main.get_all_vectorstores", return_value={}),
+            patch("medasist.api.main.build_chain", return_value=MagicMock()),
+            patch(
+                "medasist.api.main.build_stream_chain",
+                side_effect=lambda stores, profile, settings: chains[profile],
+            ),
+            patch(
+                "medasist.api.routers.query.get_settings",
+                return_value=_streaming_settings(),
+            ),
+            patch(
+                "medasist.api.health.check_chromadb",
+                return_value=_healthy_dependency(),
+            ),
+            patch(
+                "medasist.api.health.check_lm_studio",
+                return_value=_healthy_dependency(),
+            ),
+        ):
+            from medasist.api.main import app
+
+            with TestClient(app) as c:
+                yield c
+
+    return _factory
 
 
 _TEST_ADMIN_KEY = "test-admin-key-0123456789"
