@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from enum import StrEnum
 from typing import Literal
 
@@ -77,6 +78,115 @@ class CitationResponse(BaseModel):
             section=item.section,
             page=item.page,
         )
+
+
+def _sse_line(payload: dict) -> str:
+    """Serializa um payload como linha ``data: {json}\\n\\n`` de um evento SSE.
+
+    Parameters
+    ----------
+    payload : dict
+        Dicionário tipado do evento (ex: ``{"type": "token", "delta": ...}``).
+
+    Returns
+    -------
+    str
+        Linha ``data: {json}\\n\\n`` com UTF-8 preservado.
+    """
+    return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+
+def sse_token(delta: str) -> str:
+    """Monta o evento SSE ``token`` com o delta parcial gerado.
+
+    Parameters
+    ----------
+    delta : str
+        Trecho de texto produzido pelo LLM.
+
+    Returns
+    -------
+    str
+        Linha SSE ``data: {"type":"token","delta":...}\\n\\n``.
+    """
+    return _sse_line({"type": "token", "delta": delta})
+
+
+def sse_citations(items: list[CitationResponse]) -> str:
+    """Monta o evento SSE ``citations`` com as citações validadas.
+
+    Parameters
+    ----------
+    items : list[CitationResponse]
+        Citações já serializadas via ``CitationResponse.from_item``.
+
+    Returns
+    -------
+    str
+        Linha SSE ``data: {"type":"citations","citations":[...]}\\n\\n``.
+    """
+    return _sse_line(
+        {"type": "citations", "citations": [item.model_dump() for item in items]}
+    )
+
+
+def sse_disclaimer(text: str) -> str:
+    """Monta o evento SSE ``disclaimer`` com o aviso médico obrigatório.
+
+    Parameters
+    ----------
+    text : str
+        Texto do disclaimer.
+
+    Returns
+    -------
+    str
+        Linha SSE ``data: {"type":"disclaimer","text":...}\\n\\n``.
+    """
+    return _sse_line({"type": "disclaimer", "text": text})
+
+
+def sse_cold_start(message: str) -> str:
+    """Monta o evento SSE ``cold_start`` com a mensagem fixa.
+
+    Parameters
+    ----------
+    message : str
+        Mensagem de cold start.
+
+    Returns
+    -------
+    str
+        Linha SSE ``data: {"type":"cold_start","message":...}\\n\\n``.
+    """
+    return _sse_line({"type": "cold_start", "message": message})
+
+
+def sse_error(message: str) -> str:
+    """Monta o evento SSE ``error`` (terminal, substitui ``done``).
+
+    Parameters
+    ----------
+    message : str
+        Mensagem de erro exibida ao usuário.
+
+    Returns
+    -------
+    str
+        Linha SSE ``data: {"type":"error","message":...}\\n\\n``.
+    """
+    return _sse_line({"type": "error", "message": message})
+
+
+def sse_done() -> str:
+    """Monta o evento SSE ``done`` (terminal de sucesso).
+
+    Returns
+    -------
+    str
+        Linha SSE ``data: {"type":"done"}\\n\\n``.
+    """
+    return _sse_line({"type": "done"})
 
 
 class QueryResponse(BaseModel):

@@ -20,7 +20,7 @@ from medasist.config import (
     csv_list,
     get_settings,
 )
-from medasist.generation.chain import build_chain
+from medasist.generation.chain import build_chain, build_stream_chain
 from medasist.logging_setup import configure_logging
 from medasist.profiles.schemas import UserProfile
 from medasist.vectorstore.store import (
@@ -60,8 +60,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.chains = {
         profile: build_chain(stores, profile, settings) for profile in UserProfile
     }
+    app.state.streaming_chains = {
+        profile: build_stream_chain(stores, profile, settings)
+        for profile in UserProfile
+    }
 
-    logger.info("Lifespan: %d chains aquecidas.", len(app.state.chains))
+    logger.info(
+        "Lifespan: %d chains e %d streaming chains aquecidas.",
+        len(app.state.chains),
+        len(app.state.streaming_chains),
+    )
     yield
 
 
