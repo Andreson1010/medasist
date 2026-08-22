@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
 import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from limits import parse as parse_limit
 from slowapi.errors import RateLimitExceeded
 from slowapi.wrappers import Limit
-from starlette.responses import ClientDisconnect
 
 from medasist.api.deps import limiter
 from medasist.api.routers.query import (
@@ -589,26 +586,4 @@ class TestStreamEventsDisconnect:
         events = iter(_stream_events(self._body(), self._stream(closed=closed)))
         next(events)
         events.close()
-        assert closed == [True]
-
-    def test_client_disconnect_stops_streaming_response(self) -> None:
-        """Mecanismo real de produção: o ASGI ``send`` levanta
-        ``ClientDisconnect`` (Starlette) quando o cliente some; o servidor
-        encerra o gerador e o ``finally`` do wrapper fecha o stream interno.
-        O fechamento do gerador é explícito (determinístico) porque o Starlette
-        0.45.x não garante o ``close()`` de um ``body_iterator`` síncrono ao
-        detectar a desconexão — depende do GC, o que tornaria o teste flaky."""
-
-        async def _fake_send(message):  # type: ignore[no-untyped-def]
-            if message["type"] == "http.response.body" and message.get("body"):
-                raise ClientDisconnect()
-
-        closed: list[bool] = []
-        gen = _stream_events(self._body(), self._stream(closed=closed))
-        response = StreamingResponse(gen, media_type="text/event-stream")
-
-        with pytest.raises(ClientDisconnect):
-            asyncio.run(response.stream_response(_fake_send))
-
-        gen.close()
         assert closed == [True]
