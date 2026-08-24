@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 # evitar import circular (chain importa ``decompose_query`` deste módulo).
 _TOKEN_RE = re.compile(r"\b[a-zà-ú0-9]+\b")
 
-# Conectores de coordenação reconhecidos como token de conteúdo na heurística
-# ``_is_compound`` (Q4). ``e`` é stopword e por isso só ``ou``/``e/ou`` costumam
-# sobreviver à remoção de stopwords; mantidos por fidelidade ao critério.
+# Conectores de coordenação reconhecidos na heurística ``_is_compound`` (Q4).
+# ``e`` é stopword — por isso a detecção ocorre no texto bruto (pré-remoção de
+# stopwords), sobre o conjunto de TODOS os tokens da query, não só os de
+# conteúdo.
 _CONNECTORS = frozenset({"e", "ou", "e/ou"})
 
 # Classe ``ChatOpenAI`` do split, preenchida lazy na primeira chamada a
@@ -37,19 +38,20 @@ _DECOMPOSE_PROMPT = PromptTemplate.from_template(
 def _is_compound(query: str, settings: Settings) -> bool:
     """Decide deterministicamente se a pergunta é composta (heurística Q4).
 
-    Considera composta quando o conjunto de tokens de conteúdo (stopwords
-    removidas via ``_TOKEN_RE``) tem pelo menos
-    ``retrieval_decompose_min_content_tokens`` itens E (a) contém um conector
-    de coordenação (``e``, ``ou``, ``e/ou``) como token de conteúdo OU (b) uma
-    vírgula seguida de mais tokens de conteúdo.
+    Considera composta quando o conjunto de TODOS os tokens da query (via
+    ``_TOKEN_RE``, SEM remoção de stopwords) tem pelo menos
+    ``retrieval_decompose_min_tokens`` itens E (a) contém um conector de
+    coordenação (``e``, ``ou``, ``e/ou``) detectado no texto bruto — pré-
+    remoção de stopwords, pois ``e`` é stopword mas é conector — OU (b) uma
+    vírgula seguida de mais tokens de conteúdo (``_has_comma_with_content``).
 
     Parameters
     ----------
     query : str
         Pergunta do usuário.
     settings : Settings
-        Configurações com ``retrieval_stopwords``,
-        ``retrieval_decompose_min_content_tokens``.
+        Configurações com ``retrieval_stopwords`` e
+        ``retrieval_decompose_min_tokens``.
 
     Returns
     -------
@@ -57,13 +59,12 @@ def _is_compound(query: str, settings: Settings) -> bool:
         ``True`` quando a pergunta é considerada composta.
     """
     tokens = {m.group(0) for m in _TOKEN_RE.finditer(query.lower())}
-    stopwords = set(settings.retrieval_stopwords)
-    content_tokens = tokens - stopwords
 
-    if len(content_tokens) < settings.retrieval_decompose_min_content_tokens:
+    if len(tokens) < settings.retrieval_decompose_min_tokens:
         return False
-    if _CONNECTORS & content_tokens:
+    if _CONNECTORS & tokens:
         return True
+    stopwords = set(settings.retrieval_stopwords)
     return _has_comma_with_content(query, stopwords)
 
 
