@@ -3,8 +3,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import chromadb
 import pytest
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
+from langchain_core.messages import AIMessage
+from pydantic import SecretStr
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
 
@@ -17,6 +21,7 @@ from medasist.evaluation.metrics import (
 )
 from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile
+from medasist.vectorstore.store import get_vectorstore
 
 _ADMIN_KEY = "test-admin-key-0123456789"
 
@@ -469,6 +474,107 @@ class TestEvaluateGoldenSet:
 
         with pytest.raises(ValueError, match="vazia"):
             evaluate_golden_set([], stores={}, settings=_settings())
+
+
+class TestCollectRowsDecompose:
+    def _decompose_settings(self) -> Settings:
+        """Settings com decomposição ativa para exercitar a invariante AD-011."""
+        return Settings(
+            lm_studio_api_key="lm-studio-test",
+            admin_api_key=SecretStr("test-admin-key-0123456789"),
+            retrieval_top_k=10,
+            retrieval_score_threshold=0.4,
+            retrieval_query_rewrite_enabled=False,
+            retrieval_decompose_enabled=True,
+            retrieval_decompose_max_sub_questions=5,
+            retrieval_decompose_min_tokens=4,
+        )
+
+    def test_collect_rows_answer_reflects_decomposition(
+        self, mocker: MagicMock, tmp_path
+    ) -> None:
+        """MP-12/AD-011: ``_collect_rows`` usa o ``run_query`` REAL com a
+        decomposição ativa — uma pergunta composta (split mockado) produz uma
+        row cujo ``answer`` é o merged das partes (citações re-numeradas) e
+        ``cold_flags`` reflete o hit."""
+        from medasist.evaluation.metrics import _collect_rows
+
+        settings = self._decompose_settings()
+
+        class _TopicEmbeddings(Embeddings):
+            def embed_documents(self, texts):
+                return [
+                    (
+                        [1.0, 0.0, 0.0, 0.0]
+                        if "dose" in t.lower()
+                        else [0.0, 1.0, 0.0, 0.0]
+                    )
+                    for t in texts
+                ]
+
+            def embed_query(self, text):
+                lower = text.lower()
+                if "dose" in lower:
+                    return [1.0, 0.0, 0.0, 0.0]
+                if "álcool" in lower or "alcool" in lower:
+                    return [0.0, 1.0, 0.0, 0.0]
+                return [0.5, 0.5, 0.0, 0.0]
+
+        client = chromadb.PersistentClient(path=str(tmp_path / "chroma"))
+        store = get_vectorstore(DocType.BULA, client, _TopicEmbeddings(), settings)
+        store.add_texts(
+            texts=[
+                "A dose de dipirona é 500 mg por via oral.",
+                "Não tomar dipirona com álcool durante o tratamento.",
+            ],
+            metadatas=[
+                {
+                    "doc_type": "bula",
+                    "source_path": "bula_dipirona.pdf",
+                    "page": "2",
+                    "section": "Posologia",
+                },
+                {
+                    "doc_type": "bula",
+                    "source_path": "bula_dipirona.pdf",
+                    "page": "4",
+                    "section": "Interações",
+                },
+            ],
+            ids=["bula_000", "bula_001"],
+        )
+        stores = {DocType.BULA: store}
+
+        split_instance = MagicMock()
+        split_instance.return_value = AIMessage(
+            content="Qual a dose de dipirona?\nPosso tomar dipirona com álcool?"
+        )
+        mocker.patch(
+            "medasist.retrieval.decompose.ChatOpenAI", return_value=split_instance
+        )
+        gen_instance = MagicMock()
+        gen_instance.side_effect = [
+            AIMessage(content="Dose de dipirona: 500 mg [1]."),
+            AIMessage(content="Evite álcool durante o tratamento [1]."),
+        ]
+        mocker.patch("medasist.generation.chain.ChatOpenAI", return_value=gen_instance)
+
+        questions = [
+            GoldenQuestion(
+                question="Qual a dose de dipirona e posso tomar com álcool?",
+                reference_answer="Dose de dipirona e interação com álcool.",
+                reference_contexts=["A dose de dipirona é 500 mg por via oral."],
+            )
+        ]
+
+        rows, cold_flags = _collect_rows(
+            questions, stores, settings, UserProfile.MEDICO, None
+        )
+
+        assert cold_flags == [False]
+        # resposta veio do run_query REAL decomposto (merged das duas partes)
+        assert "Dose de dipirona: 500 mg [1]." in rows[0]["answer"]
+        assert "Evite álcool durante o tratamento [2]." in rows[0]["answer"]
 
 
 class TestPackageExports:

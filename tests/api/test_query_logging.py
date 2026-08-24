@@ -3,8 +3,18 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock
 
+import chromadb
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.embeddings import Embeddings
+from langchain_core.messages import AIMessage
+from pydantic import SecretStr
+
+from medasist.config import Settings
+from medasist.generation.chain import run_query
+from medasist.ingestion.schemas import DocType
+from medasist.profiles.schemas import UserProfile
+from medasist.vectorstore.store import get_vectorstore
 
 
 class TestQueryLogging:
@@ -46,6 +56,106 @@ class TestQueryLogging:
         records = [r for r in caplog.records if r.getMessage().startswith("query:")]
         assert records, "nenhum record de query capturado"
         assert "doc_types=None" in records[0].getMessage()
+
+
+class TestCompoundQueryLogging:
+    def _decompose_settings(self) -> Settings:
+        """Settings com decomposição ativa para o log composto."""
+        return Settings(
+            admin_api_key=SecretStr("test-admin-key-0123456789"),
+            retrieval_top_k=10,
+            retrieval_score_threshold=0.4,
+            retrieval_query_rewrite_enabled=False,
+            retrieval_decompose_enabled=True,
+            retrieval_decompose_max_sub_questions=5,
+            retrieval_decompose_min_tokens=4,
+        )
+
+    def test_compound_log_emitted_with_counts_and_no_data_leak(
+        self, mocker: MagicMock, caplog: pytest.LogCaptureFixture, tmp_path
+    ) -> None:
+        """Com pergunta composta + decomposição ativa, o log composto de
+        ``run_query`` é emitido com nº de sub-perguntas/hits/misses corretos e
+        sem vazar o texto da pergunta."""
+        settings = self._decompose_settings()
+
+        class _TopicEmbeddings(Embeddings):
+            def embed_documents(self, texts):
+                return [
+                    (
+                        [1.0, 0.0, 0.0, 0.0]
+                        if "dose" in t.lower()
+                        else [0.0, 1.0, 0.0, 0.0]
+                    )
+                    for t in texts
+                ]
+
+            def embed_query(self, text):
+                lower = text.lower()
+                if "dose" in lower:
+                    return [1.0, 0.0, 0.0, 0.0]
+                if "álcool" in lower or "alcool" in lower:
+                    return [0.0, 1.0, 0.0, 0.0]
+                return [0.5, 0.5, 0.0, 0.0]
+
+        client = chromadb.PersistentClient(path=str(tmp_path / "chroma"))
+        store = get_vectorstore(DocType.BULA, client, _TopicEmbeddings(), settings)
+        store.add_texts(
+            texts=[
+                "A dose de dipirona é 500 mg por via oral.",
+                "Não tomar dipirona com álcool durante o tratamento.",
+            ],
+            metadatas=[
+                {
+                    "doc_type": "bula",
+                    "source_path": "bula_dipirona.pdf",
+                    "page": "2",
+                    "section": "Posologia",
+                },
+                {
+                    "doc_type": "bula",
+                    "source_path": "bula_dipirona.pdf",
+                    "page": "4",
+                    "section": "Interações",
+                },
+            ],
+            ids=["bula_000", "bula_001"],
+        )
+        stores = {DocType.BULA: store}
+
+        split_instance = MagicMock()
+        split_instance.return_value = AIMessage(
+            content="Qual a dose de dipirona?\nPosso tomar dipirona com álcool?"
+        )
+        mocker.patch(
+            "medasist.retrieval.decompose.ChatOpenAI", return_value=split_instance
+        )
+        gen_instance = MagicMock()
+        gen_instance.side_effect = [
+            AIMessage(content="Dose de dipirona: 500 mg [1]."),
+            AIMessage(content="Evite álcool durante o tratamento [1]."),
+        ]
+        mocker.patch("medasist.generation.chain.ChatOpenAI", return_value=gen_instance)
+
+        question = "Qual a dose de dipirona e posso tomar com álcool?"
+        with caplog.at_level(logging.INFO, logger="medasist.generation.chain"):
+            run_query(question, stores, UserProfile.MEDICO, settings)
+
+        records = [
+            r
+            for r in caplog.records
+            if r.getMessage().startswith("run_query: pergunta composta")
+        ]
+        assert records, "nenhum record de log composto capturado"
+        message = records[0].getMessage()
+        assert "2 sub-pergunta(s)" in message
+        assert "hits=2" in message
+        assert "misses=0" in message
+        assert "unanswered=0" in message
+        assert "cold_start=False" in message
+        # sem vazar dados: o texto da pergunta nunca aparece no log composto
+        assert question not in message
+        assert "dipirona" not in message
 
 
 class TestQueryStreamLogging:
