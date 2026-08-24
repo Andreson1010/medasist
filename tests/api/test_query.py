@@ -573,7 +573,10 @@ class TestQueryUnansweredSubQuestions:
             answer="parcial [1].",
             citations=[
                 CitationItem(
-                    index=1, source="bula_amoxicilina.pdf", section="Posologia", page="3"
+                    index=1,
+                    source="bula_amoxicilina.pdf",
+                    section="Posologia",
+                    page="3",
                 )
             ],
             profile=UserProfile.MEDICO,
