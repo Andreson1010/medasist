@@ -147,4 +147,3 @@ class TestRemapAnswer:
     def test_single_marker_shift_to_k_plus_one(self) -> None:
         # [1] → [k+1] com offset k
         assert remap_answer("[1]", 4) == "[5]"
-
