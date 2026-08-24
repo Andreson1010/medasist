@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
+import httpx
 from fastapi.testclient import TestClient
 
 from medasist.generation.chain import GenerationResult
@@ -153,12 +154,12 @@ def _ingest_client() -> Iterator[tuple[TestClient, dict[str, str]]]:
             yield c, {"X-Admin-Key": _ADMIN_KEY}
 
 
-def _assert_rate_limited(response) -> None:
+def _assert_rate_limited(response: httpx.Response) -> None:
     """Assert response é um 429 do slowapi.
 
     Parameters
     ----------
-    response
+    response : httpx.Response
         Resposta do TestClient.
     """
     assert response.status_code == 429
