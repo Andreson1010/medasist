@@ -114,28 +114,38 @@ def validate_citations(
     return answer, valid
 
 
-def remap_answer(answer: str, offset: int) -> str:
-    """Desloca os marcadores ``[N]`` de uma resposta por um ``offset``.
+def remap_answer(answer: str, index_map: dict[int, int]) -> str:
+    """Re-numera os marcadores ``[N]`` de uma resposta usando um mapa.
 
-    Substitui cada marcador ``[N]`` por ``[N+offset]``. Usado no merge de
-    sub-respostas para re-numerar citações num espaço 1-based único: a resposta
-    de cada sub-pergunta tem marcadores próprios ``[1..k]``, e o offset
-    acumulado reposiciona-os no espaço global do texto merged.
+    Substitui cada marcador ``[N]`` por ``[index_map[N]]`` quando ``N`` está
+    no mapa. Marcadores fora do mapa são REMOVIDOS do texto (mesma política de
+    órfão de ``validate_citations``), nunca deixando ``[N]`` apontando para
+    nada. Usado no merge de sub-respostas para re-numerar citações num espaço
+    1-based único e SEQUENCIAL: os índices ORIGINAIS das citações de uma sub
+    podem ser não-contíguos após ``validate_citations`` (ex: ``[1]`` e ``[3]``
+    quando ``[2]`` foi alucinada e removida), então um deslocamento linear por
+    ``len`` colidiria índices entre subs — o mapa atribui a posição sequencial
+    correta.
 
     Parameters
     ----------
     answer : str
         Resposta gerada, possivelmente contendo marcadores ``[N]``.
-    offset : int
-        Deslocamento a somar a cada marcador. ``0`` não altera a resposta.
+    index_map : dict[int, int]
+        Mapeamento ``{índice_original: índice_novo}``. Um marcador ``[N]``
+        com ``N`` fora do mapa é removido do texto.
 
     Returns
     -------
     str
-        Resposta com os marcadores ``[N]`` deslocados por ``offset``.
+        Resposta com os marcadores ``[N]`` re-numerados conforme ``index_map``.
     """
 
-    def _shift(match: re.Match) -> str:
-        return f"[{int(match.group(1)) + offset}]"
+    def _remap(match: re.Match) -> str:
+        old = int(match.group(1))
+        new = index_map.get(old)
+        if new is None:
+            return ""
+        return f"[{new}]"
 
-    return re.sub(r"\[(\d+)\]", _shift, answer)
+    return re.sub(r"\[(\d+)\]", _remap, answer)

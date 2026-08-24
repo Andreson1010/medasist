@@ -184,6 +184,45 @@ def _run_single(
     )
 
 
+def _renumber_citations(
+    citations: list[CitationItem],
+    next_index: int,
+) -> tuple[dict[int, int], list[CitationItem]]:
+    """Re-numera citações num espaço 1-based sequencial e devolve o mapa.
+
+    As citações válidas de uma sub podem ter índices ORIGINAIS não-contíguos
+    (``validate_citations`` preserva os índices dos documentos recuperados —
+    ex: ``[1]`` e ``[3]`` quando ``[2]`` foi alucinada e removida). O mapa
+    ``{índice_original: índice_global}`` atribui a posição sequencial no
+    espaço merged acumulado, evitando colisões de índice entre subs.
+
+    Parameters
+    ----------
+    citations : list[CitationItem]
+        Citações válidas de uma sub-pergunta, na ordem dos documentos.
+    next_index : int
+        Próximo índice global 1-based disponível no espaço merged acumulado.
+
+    Returns
+    -------
+    tuple[dict[int, int], list[CitationItem]]
+        ``(index_map, renumbered)`` onde ``index_map`` mapeia
+        ``{índice_original: índice_global}`` e ``renumbered`` são as mesmas
+        citações com o índice global aplicado.
+    """
+    index_map = {citation.index: next_index + i for i, citation in enumerate(citations)}
+    renumbered = [
+        CitationItem(
+            index=index_map[citation.index],
+            source=citation.source,
+            section=citation.section,
+            page=citation.page,
+        )
+        for citation in citations
+    ]
+    return index_map, renumbered
+
+
 def _merge_sub_results(
     subs: list[str],
     sub_results: list[GenerationResult],
@@ -191,13 +230,18 @@ def _merge_sub_results(
 ) -> GenerationResult:
     """Recombina sub-respostas numa resposta única com citações re-numeradas.
 
-    Para cada sub-pergunta com citação válida, remapeia os marcadores ``[N]``
-    via ``remap_answer`` por um offset acumulado e re-numera as citações num
-    espaço 1-based único; as respostas são concatenadas. Sub-perguntas sem
-    citação válida (cold start ou resposta sem fonte) não entram no merged e
-    são registradas em ``unanswered_sub_questions``. Se nenhuma sub-pergunta
-    tem citação válida, retorna cold start total (regra médica: nunca resposta
-    sem fonte).
+    Para cada sub-pergunta com citação válida, re-numera as citações num
+    espaço 1-based único e SEQUENCIAL via ``remap_answer`` (mapa
+    ``{índice_original: índice_global}``) e os marcadores ``[N]`` da resposta
+    são remapeados pelo mesmo mapa. Como ``validate_citations`` preserva os
+    índices ORIGINAIS das citações (que podem ser não-contíguos — ex: ``[1]``
+    e ``[3]`` com ``[2]`` alucinada removida), o deslocamento linear por
+    ``len(citations)`` colidiria índices entre subs; o mapa sequencial garante
+    índices únicos 1..M e a regra médica 1:1 citação↔fonte. As respostas são
+    concatenadas. Sub-perguntas sem citação válida (cold start ou resposta
+    sem fonte) não entram no merged e são registradas em
+    ``unanswered_sub_questions``. Se nenhuma sub-pergunta tem citação válida,
+    retorna cold start total (regra médica: nunca resposta sem fonte).
 
     Parameters
     ----------
@@ -217,23 +261,16 @@ def _merge_sub_results(
     merged_parts: list[str] = []
     merged_citations: list[CitationItem] = []
     unanswered: list[str] = []
-    offset = 0
+    next_index = 1
 
     for sub, result in zip(subs, sub_results, strict=True):
         if result.is_cold_start or not result.citations:
             unanswered.append(sub)
             continue
-        merged_parts.append(remap_answer(result.answer, offset))
-        for citation in result.citations:
-            merged_citations.append(
-                CitationItem(
-                    index=citation.index + offset,
-                    source=citation.source,
-                    section=citation.section,
-                    page=citation.page,
-                )
-            )
-        offset += len(result.citations)
+        index_map, renumbered = _renumber_citations(result.citations, next_index)
+        merged_parts.append(remap_answer(result.answer, index_map))
+        merged_citations.extend(renumbered)
+        next_index += len(result.citations)
 
     profile = sub_results[0].profile
 
@@ -482,16 +519,18 @@ def stream_answer(
     decomposta, delega a ``_stream_single`` (identidade byte-identical quando a
     flag está off). Quando decomposta em 2+ sub-perguntas, processa cada sub
     pelo mesmo funil; como as subs são sequenciais, antes de emitir a resposta
-    de cada sub já se conhece o offset acumulado das citações das subs
-    anteriores, então o texto de cada sub é remapeado via ``remap_answer``
-    (``[N]`` re-numerados) e o mesmo separador ``\\n\\n`` do merged síncrono é
-    usado entre subs hit — o texto streamado coincide com o ``answer`` do
-    ``run_query``. Sub-perguntas sem citação válida (miss/cold start) não
-    emitem conteúdo. O terminal retorna ``(citations, is_cold_start)`` via
-    ``_merge_sub_results`` (todas-miss → ``([], True)``; ≥1 hit → citações
-    re-numeradas, ``False``). Com ``stores`` vazio (ou ``doc_types`` que
-    filtram todas as coleções), retorna cold start antes de chamar
-    ``decompose_query`` — o LLM de split nunca é chamado (edge case RAG-03).
+    de cada sub já se conhece o mapa de re-numeração (posição sequencial das
+    citações das subs anteriores), então o texto de cada sub é remapeado via
+    ``remap_answer`` (``[N]`` re-numerados num espaço 1..M único e sequencial,
+    mesmo quando os índices originais das subs são não-contíguos) e o mesmo
+    separador ``\\n\\n`` do merged síncrono é usado entre subs hit — o texto
+    streamado coincide com o ``answer`` do ``run_query``. Sub-perguntas sem
+    citação válida (miss/cold start) não emitem conteúdo. O terminal retorna
+    ``(citations, is_cold_start)`` via ``_merge_sub_results`` (todas-miss →
+    ``([], True)``; ≥1 hit → citações re-numeradas, ``False``). Com ``stores``
+    vazio (ou ``doc_types`` que filtram todas as coleções), retorna cold start
+    antes de chamar ``decompose_query`` — o LLM de split nunca é chamado (edge
+    case RAG-03).
 
     Protocolo-agnóstico: nada sabe de SSE.
 
@@ -548,7 +587,7 @@ def stream_answer(
             gen.close()
 
     sub_results: list[GenerationResult] = []
-    offset = 0
+    next_index = 1
     prior_hit = False
     for sub in subs:
         gen = _stream_single(sub, stores, profile, settings, doc_types)
@@ -577,9 +616,12 @@ def stream_answer(
             )
             continue
 
+        # Mesmo mapa sequencial do merge síncrono: re-numera os marcadores
+        # [N] da sub (bufferizada) antes do yield — paridade com run_query.
+        index_map, _ = _renumber_citations(citations, next_index)
         if prior_hit:
             yield "\n\n"
-        yield remap_answer(full, offset)
+        yield remap_answer(full, index_map)
         prior_hit = True
         sub_results.append(
             GenerationResult(
@@ -590,7 +632,7 @@ def stream_answer(
                 is_cold_start=False,
             )
         )
-        offset += len(citations)
+        next_index += len(citations)
 
     merged = _merge_sub_results(subs, sub_results, settings)
     return merged.citations, merged.is_cold_start

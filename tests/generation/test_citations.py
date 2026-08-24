@@ -132,18 +132,24 @@ class TestValidateCitations:
 
 
 class TestRemapAnswer:
-    def test_offset_zero_unchanged(self) -> None:
-        assert remap_answer("Veja [1] e [2].", 0) == "Veja [1] e [2]."
+    def test_identity_map_unchanged(self) -> None:
+        assert remap_answer("Veja [1] e [2].", {1: 1, 2: 2}) == "Veja [1] e [2]."
 
-    def test_positive_offset_shifts_markers(self) -> None:
-        assert remap_answer("Veja [1].", 3) == "Veja [4]."
+    def test_map_renumbers_markers(self) -> None:
+        assert remap_answer("Veja [1].", {1: 4}) == "Veja [4]."
 
-    def test_multiple_markers_shifted(self) -> None:
-        assert remap_answer("[1] e [2] e [3].", 2) == "[3] e [4] e [5]."
+    def test_multiple_markers_mapped(self) -> None:
+        assert (
+            remap_answer("[1] e [2] e [3].", {1: 3, 2: 4, 3: 5}) == "[3] e [4] e [5]."
+        )
 
     def test_no_markers_unchanged(self) -> None:
-        assert remap_answer("Resposta sem citações.", 5) == "Resposta sem citações."
+        assert remap_answer("Resposta sem citações.", {}) == "Resposta sem citações."
 
-    def test_single_marker_shift_to_k_plus_one(self) -> None:
-        # [1] → [k+1] com offset k
-        assert remap_answer("[1]", 4) == "[5]"
+    def test_non_contiguous_map_renumbers_sequentially(self) -> None:
+        # índices originais {1, 3} (2 não citada) → {1, 2} sequenciais
+        assert remap_answer("Veja [1] e [3].", {1: 1, 3: 2}) == "Veja [1] e [2]."
+
+    def test_marker_outside_map_removed(self) -> None:
+        # [2] fora do mapa → removido (mesma política de órfão de validate_citations)
+        assert remap_answer("Veja [1] e [2].", {1: 1}) == "Veja [1] e ."
