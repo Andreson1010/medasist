@@ -1,7 +1,7 @@
 # Roadmap
 
-**Current Milestone:** M2 — Estabilização e Correções Críticas
-**Status:** Planning
+**Current Milestone:** M5 — CI/CD e Deploy
+**Status:** Concluído
 
 ---
 
@@ -149,24 +149,28 @@
 ## M5 — CI/CD e Deploy
 
 **Goal:** Automatizar qualidade e deploy.
+**Target:** Concluído
 
 ### Features
 
-**CICD-01: GitHub Actions CI** - PLANNED
+**CICD-01: GitHub Actions CI** - DONE
 - Workflow: ruff + black --check + pytest --cov-fail-under=80
 - Rodar em cada PR
+- `.github/workflows/ci.yml` (pull_request + push em main, Python 3.11, instala do `requirements.lock`)
 
-**CICD-02: Lock file de dependências** - PLANNED
+**CICD-02: Lock file de dependências** - DONE
 - Adicionar `langchain-text-splitters` aos requirements
 - Gerar lock file para transitive deps
 - Remover deps não usadas (avaliar langchain-community)
+- Resultado da avaliação: `langchain-community` é exigida pelo `ragas 0.2.15` no import (`ragas.llms.base`) — mantida nos requirements, documentado em comentário. Lock gerado com `pip-compile` (`requirements.lock`, 622 linhas).
 
-**CICD-03: Coverage gate no pyproject.toml** - PLANNED
+**CICD-03: Coverage gate no pyproject.toml** - DONE
 - Mover `--cov-fail-under=80` para `addopts`
 - Garantir que `pytest` bare também enforce 80%
 
-**CICD-04: Testes de rate limiting** - PLANNED
+**CICD-04: Testes de rate limiting** - DONE
 - Testar slowapi 429 em /query e /ingest
+- Bônus: teste expôs bug real — `@limiter.limit` no /ingest ficava acima de `@router.post` e nunca rodava; corrigido com `_rate_limited` no módulo (mesmo workaround do /query).
 
 ---
 

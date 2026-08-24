@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import functools
 import logging
 import secrets
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -29,6 +31,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 STREAM_CHUNK_SIZE: int = 1024 * 1024
+
+# Limite de requisições por minuto para o endpoint de ingestão.
+INGEST_RATE_LIMIT = "5/minute"
+
+
+def _rate_limited(func: Callable) -> Callable:
+    """Aplica o rate limit do slowapi preservando a resolução de anotações.
+
+    O wrapper do slowapi usa ``*args, **kwargs`` e o seu ``__globals__`` aponta
+    para o módulo do slowapi. Sob ``from __future__ import annotations`` as
+    anotações são strings (``ForwardRef``) e o FastAPI as resolve contra o
+    ``__globals__`` do callable registrado na rota — como ``DocType`` não existe
+    no namespace do slowapi, a anotação ficaria sem resolver (PydanticUserError
+    na validação do query param). Esta camada extra (definida neste módulo)
+    garante que o callable registrado tenha o ``__globals__`` do módulo ingest,
+    preservando o parsing do corpo e mantendo a checagem de rate limit no
+    dispatch.
+
+    Parameters
+    ----------
+    func : Callable
+        Handler ``(request, file, doc_type)`` a ser limitado.
+
+    Returns
+    -------
+    Callable
+        Handler envolvido pelo slowapi com o rate limit ativo.
+    """
+    limited = limiter.limit(INGEST_RATE_LIMIT)(func)
+
+    @functools.wraps(func)
+    async def _wrapped(*args: object, **kwargs: object) -> IngestResponse:
+        return await limited(*args, **kwargs)
+
+    return _wrapped
 
 
 async def _stream_upload_with_limit(
@@ -99,7 +136,6 @@ def verify_admin_key(x_admin_key: Annotated[str, Header()]) -> None:
         )
 
 
-@limiter.limit("5/minute")
 @router.post(
     "/ingest",
     response_model=IngestResponse,
@@ -107,6 +143,7 @@ def verify_admin_key(x_admin_key: Annotated[str, Header()]) -> None:
     summary="Ingestão de documento PDF",
     description="Requer header X-Admin-Key. Aceita PDF e doc_type como query param.",
 )
+@_rate_limited
 async def ingest(
     request: Request,
     file: Annotated[UploadFile, File()],

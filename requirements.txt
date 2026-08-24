@@ -2,6 +2,8 @@
 langchain==0.3.25
 langchain-openai==0.3.16
 langchain-chroma==0.2.4
+langchain-text-splitters==0.3.11
+# Mantido: ragas 0.2.15 importa langchain_community em ragas.llms.base
 langchain-community==0.3.24
 
 # Vector store
