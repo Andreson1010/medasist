@@ -414,7 +414,7 @@ class Settings(BaseSettings):
     retrieval_decompose_model: str = Field(default="")  # vazio → lm_studio_llm_model
     retrieval_decompose_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     retrieval_decompose_max_tokens: int = Field(default=256, gt=0)
-    retrieval_decompose_min_content_tokens: int = Field(default=4, gt=0)
+    retrieval_decompose_min_tokens: int = Field(default=4, gt=0)
 
     # Busca híbrida (denso + esparso BM25, RAG-02)
     retrieval_hybrid_enabled: bool = Field(default=False)

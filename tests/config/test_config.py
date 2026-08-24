@@ -405,7 +405,7 @@ class TestSettingsDecompose:
         assert settings.retrieval_decompose_model == settings.lm_studio_llm_model
         assert settings.retrieval_decompose_temperature == 0.0
         assert settings.retrieval_decompose_max_tokens == 256
-        assert settings.retrieval_decompose_min_content_tokens == 4
+        assert settings.retrieval_decompose_min_tokens == 4
 
     def test_empty_model_resolves_to_lm_studio_model(self) -> None:
         settings = Settings(
@@ -423,14 +423,14 @@ class TestSettingsDecompose:
             retrieval_decompose_model="split-mini",
             retrieval_decompose_temperature=0.5,
             retrieval_decompose_max_tokens=64,
-            retrieval_decompose_min_content_tokens=6,
+            retrieval_decompose_min_tokens=6,
         )
         assert settings.retrieval_decompose_enabled is True
         assert settings.retrieval_decompose_max_sub_questions == 3
         assert settings.retrieval_decompose_model == "split-mini"
         assert settings.retrieval_decompose_temperature == 0.5
         assert settings.retrieval_decompose_max_tokens == 64
-        assert settings.retrieval_decompose_min_content_tokens == 6
+        assert settings.retrieval_decompose_min_tokens == 6
 
     def test_zero_max_sub_questions_raises_validation_error(self) -> None:
         with pytest.raises(ValidationError):
@@ -446,11 +446,11 @@ class TestSettingsDecompose:
                 retrieval_decompose_max_sub_questions=-1,
             )
 
-    def test_zero_min_content_tokens_raises_validation_error(self) -> None:
+    def test_zero_min_tokens_raises_validation_error(self) -> None:
         with pytest.raises(ValidationError):
             Settings(
                 admin_api_key=SecretStr("very-strong-key-0123456789"),
-                retrieval_decompose_min_content_tokens=0,
+                retrieval_decompose_min_tokens=0,
             )
 
     def test_temperature_below_zero_raises_validation_error(self) -> None:
@@ -480,14 +480,14 @@ class TestSettingsDecompose:
         monkeypatch.setenv("RETRIEVAL_DECOMPOSE_MODEL", "env-split")
         monkeypatch.setenv("RETRIEVAL_DECOMPOSE_TEMPERATURE", "0.4")
         monkeypatch.setenv("RETRIEVAL_DECOMPOSE_MAX_TOKENS", "64")
-        monkeypatch.setenv("RETRIEVAL_DECOMPOSE_MIN_CONTENT_TOKENS", "6")
+        monkeypatch.setenv("RETRIEVAL_DECOMPOSE_MIN_TOKENS", "6")
         settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
         assert settings.retrieval_decompose_enabled is True
         assert settings.retrieval_decompose_max_sub_questions == 3
         assert settings.retrieval_decompose_model == "env-split"
         assert settings.retrieval_decompose_temperature == 0.4
         assert settings.retrieval_decompose_max_tokens == 64
-        assert settings.retrieval_decompose_min_content_tokens == 6
+        assert settings.retrieval_decompose_min_tokens == 6
 
 
 class TestSettingsGenerationStreaming:
