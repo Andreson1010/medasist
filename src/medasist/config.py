@@ -408,6 +408,14 @@ class Settings(BaseSettings):
     retrieval_query_rewrite_max_tokens: int = Field(default=128, gt=0)
     retrieval_query_rewrite_max_output: int = Field(default=200, gt=0)
 
+    # Decomposição de perguntas multi-parte (RAG-03)
+    retrieval_decompose_enabled: bool = Field(default=False)
+    retrieval_decompose_max_sub_questions: int = Field(default=5, gt=0)
+    retrieval_decompose_model: str = Field(default="")  # vazio → lm_studio_llm_model
+    retrieval_decompose_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    retrieval_decompose_max_tokens: int = Field(default=256, gt=0)
+    retrieval_decompose_min_content_tokens: int = Field(default=4, gt=0)
+
     # Busca híbrida (denso + esparso BM25, RAG-02)
     retrieval_hybrid_enabled: bool = Field(default=False)
     retrieval_hybrid_rrf_k: int = Field(default=60, gt=0)
@@ -501,6 +509,8 @@ class Settings(BaseSettings):
             self.eval_embedding_model = self.lm_studio_embedding_model
         if not self.retrieval_query_rewrite_model:
             self.retrieval_query_rewrite_model = self.lm_studio_llm_model
+        if not self.retrieval_decompose_model:
+            self.retrieval_decompose_model = self.lm_studio_llm_model
         return self
 
     # Chunking — bulas
