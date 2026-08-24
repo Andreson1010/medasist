@@ -38,7 +38,7 @@ graph TD
 |--------|------------------|
 | `retrieval/decompose.py` | `decompose_query(query, settings) -> list[str]` — gate `_is_compound` (Q4), split via `ChatOpenAI` lazy, cap `max_sub_questions`, degradação para `[question]`. Nada sabe de geração/merge. |
 | `generation/chain.py` | `run_query`/`stream_answer` chamam `decompose_query`; se `len>1`, rodam cada sub pelo funil e chamam `_merge_sub_results`; se `len==1`, usam `_run_single` (identidade byte-identical quando flag off). |
-| `generation/citations.py` | `remap_answer(answer, offset) -> str` — shift de marcadores `[N]` por offset acumulado (reuso em qualquer merge). |
+| `generation/citations.py` | `remap_answer(answer, index_map: dict[int, int]) -> str` — reescreve marcadores `[N]` via mapa `{índice original: índice global}`; fora-do-mapa são removidos (reuso em qualquer merge). |
 | `api/schemas.py` | `QueryResponse.unanswered_sub_questions` (aditivo, default `[]`) + mapeamento em `from_result`. |
 | `config.py` | Campos `retrieval_decompose_*` + resolução do modelo vazio em `_resolve_eval_models`. |
 
@@ -106,9 +106,9 @@ graph TD
 
 ### `src/medasist/generation/citations.py` (modify)
 
-- **Purpose**: Remapear marcadores `[N]` de uma resposta por um offset (usado no merge de sub-respostas).
+- **Purpose**: Remapear marcadores `[N]` de uma resposta via mapa sequencial de índices (usado no merge de sub-respostas).
 - **Location**: `src/medasist/generation/citations.py`
-- **Interface**: `remap_answer(answer: str, offset: int) -> str` — substitui cada `[N]` por `[N+offset]`.
+- **Interface**: `remap_answer(answer: str, index_map: dict[int, int]) -> str` — reescreve cada `[N]` para `[index_map[N]]`; marcadores fora do mapa são removidos (política de órfão, como `validate_citations`).
 - **Dependencies**: `re`.
 - **Reuses**: padrão regex `\[(\d+)\]` já usado em `validate_citations`.
 
