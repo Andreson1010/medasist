@@ -112,3 +112,30 @@ def validate_citations(
         len(citations),
     )
     return answer, valid
+
+
+def remap_answer(answer: str, offset: int) -> str:
+    """Desloca os marcadores ``[N]`` de uma resposta por um ``offset``.
+
+    Substitui cada marcador ``[N]`` por ``[N+offset]``. Usado no merge de
+    sub-respostas para re-numerar citações num espaço 1-based único: a resposta
+    de cada sub-pergunta tem marcadores próprios ``[1..k]``, e o offset
+    acumulado reposiciona-os no espaço global do texto merged.
+
+    Parameters
+    ----------
+    answer : str
+        Resposta gerada, possivelmente contendo marcadores ``[N]``.
+    offset : int
+        Deslocamento a somar a cada marcador. ``0`` não altera a resposta.
+
+    Returns
+    -------
+    str
+        Resposta com os marcadores ``[N]`` deslocados por ``offset``.
+    """
+
+    def _shift(match: re.Match) -> str:
+        return f"[{int(match.group(1)) + offset}]"
+
+    return re.sub(r"\[(\d+)\]", _shift, answer)
