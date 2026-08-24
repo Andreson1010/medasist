@@ -273,7 +273,10 @@ def run_query(
     decomposta em 2+ sub-perguntas, roda cada uma por ``_run_single`` e
     recombina via ``_merge_sub_results`` (citações re-numeradas e ``[N]``
     remapeados). Nunca fabrica conteúdo para sub-perguntas sem hit — misses
-    vão para ``unanswered_sub_questions``.
+    vão para ``unanswered_sub_questions``. Com ``stores`` vazio (ou
+    ``doc_types`` que filtram todas as coleções), retorna cold start antes de
+    chamar ``decompose_query`` — o LLM de split nunca é chamado (edge case
+    RAG-03).
 
     Parameters
     ----------
@@ -296,6 +299,22 @@ def run_query(
     """
     if settings is None:
         settings = get_settings()
+
+    # RAG-03 edge case: `stores` vazio ou `doc_types` que filtram todas as
+    # coleções → cold start ANTES de qualquer split — o LLM de split nunca é
+    # chamado (mesma semântica do early return de stores vazio em `retrieve`).
+    if not select_collections(stores, doc_types):
+        logger.info(
+            "run_query: stores sem coleções selecionadas — cold start antes "
+            "de qualquer split."
+        )
+        return GenerationResult(
+            answer=settings.cold_start_message,
+            citations=[],
+            profile=profile,
+            disclaimer=settings.disclaimer,
+            is_cold_start=True,
+        )
 
     subs = decompose_query(question, settings)
     if len(subs) == 1:
@@ -462,7 +481,9 @@ def stream_answer(
     cada sub pelo mesmo funil, acumula as respostas e recombina via
     ``_merge_sub_results`` no final, retornando ``(citations, is_cold_start)``
     conforme a política parcial (todas-miss → ``([], True)``; ≥1 hit →
-    citações re-numeradas, ``False``).
+    citações re-numeradas, ``False``). Com ``stores`` vazio (ou ``doc_types``
+    que filtram todas as coleções), retorna cold start antes de chamar
+    ``decompose_query`` — o LLM de split nunca é chamado (edge case RAG-03).
 
     Protocolo-agnóstico: nada sabe de SSE.
 
@@ -493,6 +514,16 @@ def stream_answer(
     """
     if settings is None:
         settings = get_settings()
+
+    # RAG-03 edge case: `stores` vazio ou `doc_types` que filtram todas as
+    # coleções → cold start ANTES de qualquer split — o LLM de split nunca é
+    # chamado (mesma semântica do early return de stores vazio em `retrieve`).
+    if not select_collections(stores, doc_types):
+        logger.info(
+            "stream_answer: stores sem coleções selecionadas — cold start "
+            "antes de qualquer split."
+        )
+        return [], True
 
     subs = decompose_query(question, settings)
 
