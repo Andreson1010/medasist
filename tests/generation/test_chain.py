@@ -638,6 +638,55 @@ class TestRunQueryDecompose:
         questions = [call.args[0] for call in mock_single.call_args_list]
         assert questions == ["sub A", "sub B"]
 
+    def test_empty_stores_short_circuits_before_split(self) -> None:
+        """Edge case RAG-03: stores vazio → cold start ANTES de qualquer split.
+
+        Com ``retrieval_decompose_enabled=True`` e pergunta composta, o LLM de
+        split nunca é chamado quando nenhuma coleção é selecionada.
+        """
+        settings = _make_decompose_settings()
+        stores: dict[Any, Any] = {}
+        question = "Qual a dose de Alphazol e posso tomar com Betazol?"
+
+        with (
+            patch("medasist.generation.chain.decompose_query") as mock_decompose,
+            patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            result = run_query(question, stores, UserProfile.MEDICO, settings)
+
+        mock_decompose.assert_not_called()
+        mock_split.assert_not_called()
+        mock_llm_cls.assert_not_called()
+        assert result.is_cold_start is True
+        assert result.answer == settings.cold_start_message
+        assert result.citations == []
+        assert result.disclaimer == settings.disclaimer
+
+    def test_doc_types_filtering_all_short_circuits_before_split(self) -> None:
+        """Edge case RAG-03: doc_types que filtram tudo → cold start sem split."""
+        settings = _make_decompose_settings()
+        stores = {DocType.BULA: MagicMock(name="store_bula")}
+        question = "Qual a dose de Alphazol e posso tomar com Betazol?"
+
+        with (
+            patch("medasist.generation.chain.decompose_query") as mock_decompose,
+            patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
+        ):
+            result = run_query(
+                question,
+                stores,
+                UserProfile.MEDICO,
+                settings,
+                doc_types=[DocType.PROTOCOLO],
+            )
+
+        mock_decompose.assert_not_called()
+        mock_split.assert_not_called()
+        assert result.is_cold_start is True
+        assert result.answer == settings.cold_start_message
+        assert result.citations == []
+
 
 # ---------------------------------------------------------------------------
 # stream_answer
@@ -829,6 +878,50 @@ class TestStreamDecompose:
         assert "".join(deltas) == "Olá mundo [1]."
         assert is_cold_start is False
         assert [c.index for c in citations] == [1]
+
+    def test_empty_stores_short_circuits_before_split(self) -> None:
+        """Edge case RAG-03: stores vazio → cold start ANTES do split (stream)."""
+        settings = _make_decompose_settings()
+        stores: dict[Any, Any] = {}
+        question = "Qual a dose de Alphazol e posso tomar com Betazol?"
+
+        with (
+            patch("medasist.generation.chain.decompose_query") as mock_decompose,
+            patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
+            patch("medasist.generation.chain.ChatOpenAI") as mock_llm_cls,
+        ):
+            gen = stream_answer(question, stores, UserProfile.MEDICO, settings)
+            deltas, terminal = _consume(gen)
+
+        mock_decompose.assert_not_called()
+        mock_split.assert_not_called()
+        mock_llm_cls.assert_not_called()
+        assert deltas == []
+        assert terminal == ([], True)
+
+    def test_doc_types_filtering_all_short_circuits_before_split(self) -> None:
+        """Edge case RAG-03: doc_types filtram tudo → cold start sem split."""
+        settings = _make_decompose_settings()
+        stores = {DocType.BULA: MagicMock(name="store_bula")}
+        question = "Qual a dose de Alphazol e posso tomar com Betazol?"
+
+        with (
+            patch("medasist.generation.chain.decompose_query") as mock_decompose,
+            patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
+        ):
+            gen = stream_answer(
+                question,
+                stores,
+                UserProfile.MEDICO,
+                settings,
+                doc_types=[DocType.PROTOCOLO],
+            )
+            deltas, terminal = _consume(gen)
+
+        mock_decompose.assert_not_called()
+        mock_split.assert_not_called()
+        assert deltas == []
+        assert terminal == ([], True)
 
 
 class TestStreamAnswer:
