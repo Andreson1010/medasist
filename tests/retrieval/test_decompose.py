@@ -20,7 +20,7 @@ def _settings(**overrides: object) -> Settings:
     defaults: dict[str, object] = {
         "retrieval_decompose_enabled": True,
         "retrieval_decompose_max_sub_questions": 5,
-        "retrieval_decompose_min_content_tokens": 4,
+        "retrieval_decompose_min_tokens": 4,
     }
     defaults.update(overrides)
     return Settings(admin_api_key=SecretStr(_ADMIN_KEY), **defaults)
@@ -49,8 +49,20 @@ class TestIsCompound:
     def test_single_token_not_compound(self) -> None:
         assert _is_compound("Alphazol", _settings()) is False
 
+    def test_mp02_dipirona_alcool_is_compound(self) -> None:
+        # Positivo do aceite MP-02: 10 tokens TOTAIS (>= 4) e conector "e" no
+        # texto bruto (pré-stopwords) — a heurística antiga (tokens de conteúdo)
+        # não detectava porque "e" é stopword e sobram só 3 tokens de conteúdo.
+        query = "Qual a dose de dipirona e posso tomar com álcool?"
+        assert _is_compound(query, _settings()) is True
+
+    def test_connector_e_stopword_detected_raw(self) -> None:
+        # "e" é stopword, mas é conector de coordenação — detectado no texto
+        # bruto via tokens TOTAIS (5 >= 4).
+        assert _is_compound("Alphazol e Betazol são diferentes?", _settings()) is True
+
     def test_no_connector_not_compound(self) -> None:
-        # >= 4 tokens de conteúdo, mas sem conector nem vírgula
+        # >= 4 tokens totais, mas sem conector nem vírgula
         assert _is_compound("Alphazol causa sonolência intensa", _settings()) is False
 
     def test_connector_ou_is_compound(self) -> None:
@@ -60,22 +72,27 @@ class TestIsCompound:
         query = "Alphazol causa sonolência, Betazol causa insônia?"
         assert _is_compound(query, _settings()) is True
 
-    def test_connector_below_min_content_tokens_not_compound(self) -> None:
-        # "Alphazol ou Betazol" tem 3 tokens de conteúdo (< 4)
+    def test_connector_below_min_tokens_not_compound(self) -> None:
+        # "Alphazol ou Betazol" tem 3 tokens TOTAIS (< 4), mesmo com "ou"
         assert _is_compound("Alphazol ou Betazol", _settings()) is False
 
-    def test_boundary_min_content_tokens(self) -> None:
+    def test_boundary_min_tokens(self) -> None:
         # com min=3, "Alphazol ou Betazol" (3 tokens, "ou" conector) é composta
         assert (
             _is_compound(
                 "Alphazol ou Betazol",
-                _settings(retrieval_decompose_min_content_tokens=3),
+                _settings(retrieval_decompose_min_tokens=3),
             )
             is True
         )
 
     def test_stopwords_only_not_compound(self) -> None:
+        # 4 tokens totais (gate ok), mas todos stopwords e sem conector/vírgula
         assert _is_compound("qual a dose para", _settings()) is False
+
+    def test_stopwords_only_more_tokens_not_compound(self) -> None:
+        # mesmo acima do gate (5 tokens), só-stopwords nunca é composta
+        assert _is_compound("qual a dose para quando", _settings()) is False
 
     def test_empty_query_not_compound(self) -> None:
         assert _is_compound("", _settings()) is False
@@ -174,14 +191,10 @@ class TestDecomposeDegradation:
     def test_llm_failure_returns_original_and_logs(self, mocker, caplog) -> None:
         instance = MagicMock()
         instance.side_effect = RuntimeError("timeout do LM Studio")
-        mocker.patch(
-            "medasist.retrieval.decompose.ChatOpenAI", return_value=instance
-        )
+        mocker.patch("medasist.retrieval.decompose.ChatOpenAI", return_value=instance)
         settings = _settings()
 
-        with caplog.at_level(
-            logging.ERROR, logger="medasist.retrieval.decompose"
-        ):
+        with caplog.at_level(logging.ERROR, logger="medasist.retrieval.decompose"):
             result = decompose_query(_COMPOUND_OU, settings)
 
         assert result == [_COMPOUND_OU]
