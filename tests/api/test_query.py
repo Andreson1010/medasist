@@ -541,9 +541,7 @@ class TestQueryUnansweredSubQuestions:
         result = GenerationResult(
             answer="resposta [1].",
             citations=[
-                CitationItem(
-                    index=1, source="bula.pdf", section="Posologia", page="1"
-                )
+                CitationItem(index=1, source="bula.pdf", section="Posologia", page="1")
             ],
             profile=UserProfile.MEDICO,
             disclaimer="aviso",
@@ -556,9 +554,7 @@ class TestQueryUnansweredSubQuestions:
         result = GenerationResult(
             answer="parcial [1].",
             citations=[
-                CitationItem(
-                    index=1, source="bula.pdf", section="Posologia", page="1"
-                )
+                CitationItem(index=1, source="bula.pdf", section="Posologia", page="1")
             ],
             profile=UserProfile.MEDICO,
             disclaimer="aviso",
