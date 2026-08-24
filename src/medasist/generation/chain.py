@@ -351,33 +351,32 @@ def build_chain(
     return run
 
 
-def stream_answer(
+def _stream_single(
     question: str,
     stores: dict[Any, Any],
     profile: UserProfile,
-    settings: Settings | None = None,
+    settings: Settings,
     doc_types: list[DocType] | None = None,
-) -> Generator[str, None, tuple[list[CitationItem], bool]]:
-    """Gera a resposta do LLM incrementalmente, preservando as regras de segurança.
+) -> Generator[str, None, tuple[str, list[CitationItem], bool]]:
+    """Gera a resposta de uma única pergunta de forma incremental.
 
-    Espelha ``run_query`` (retrieval, cold start, citações, perfil, doc_types),
-    trocando ``chain.invoke`` por ``chain.stream``. Cada chunk do LLM é
-    yieldado enquanto o texto completo é acumulado; ao final, ``validate_citations``
-    roda sobre a resposta completa. O estado terminal é comunicado pelo valor de
-    retorno do gerador: ``(citations, is_cold_start)``.
-
-    Protocolo-agnóstico: nada sabe de SSE.
+    Espelha ``_run_single`` para o caminho de streaming (retrieval, cold start,
+    citações, perfil, doc_types), trocando ``chain.invoke`` por ``chain.stream``.
+    Cada chunk do LLM é yieldado enquanto o texto completo é acumulado; ao final,
+    ``validate_citations`` roda sobre a resposta completa. O estado terminal é
+    comunicado pelo valor de retorno do gerador:
+    ``(full_answer, citations, is_cold_start)``.
 
     Parameters
     ----------
     question : str
-        Pergunta do usuário.
+        Pergunta (total ou sub-pergunta) do usuário.
     stores : dict
         Mapeamento ``DocType → Chroma`` (de ``get_all_vectorstores``).
     profile : UserProfile
         Perfil do usuário para selecionar temperatura, max_tokens e prompt.
-    settings : Settings | None
-        Configurações. Se ``None``, usa o singleton ``get_settings()``.
+    settings : Settings
+        Configurações (já resolvidas pelo chamador).
     doc_types : list[DocType] | None
         Filtro opcional de tipos de documento (via ``select_collections``).
 
@@ -388,19 +387,11 @@ def stream_answer(
 
     Returns
     -------
-    tuple[list[CitationItem], bool]
-        ``(citations_válidas, is_cold_start)``. Em cold start (retrieval vazio
-        ou resposta sem citações válidas) retorna ``([], True)`` sem chamar o
-        LLM quando o retrieval é vazio.
-
-    Raises
-    ------
-    Exception
-        Propaga qualquer exceção do ``chain.stream`` (ex: LM Studio indisponível).
+    tuple[str, list[CitationItem], bool]
+        ``(texto_completo, citações_válidas, is_cold_start)``. Em cold start
+        (retrieval vazio ou resposta sem citações válidas) retorna
+        ``("", [], True)`` sem chamar o LLM quando o retrieval é vazio.
     """
-    if settings is None:
-        settings = get_settings()
-
     subset = select_collections(stores, doc_types)
     retriever = build_retriever(subset, settings)
     docs: list[Document] = retriever.invoke(question)
@@ -411,7 +402,7 @@ def stream_answer(
             "stream_answer: cold start — nenhum chunk relevante para '%s'.",
             question[:60],
         )
-        return [], True
+        return "", [], True
 
     # --- Caminho normal ---
     citations = build_citations(docs)
@@ -446,14 +437,104 @@ def stream_answer(
             "Retornando cold start.",
             question[:60],
         )
-        return [], True
+        return full, [], True
 
     logger.info(
         "stream_answer: resposta gerada para profile='%s', citações=%d.",
         profile.value,
         len(valid_citations),
     )
-    return valid_citations, False
+    return full, valid_citations, False
+
+
+def stream_answer(
+    question: str,
+    stores: dict[Any, Any],
+    profile: UserProfile,
+    settings: Settings | None = None,
+    doc_types: list[DocType] | None = None,
+) -> Generator[str, None, tuple[list[CitationItem], bool]]:
+    """Gera a resposta do LLM incrementalmente, com decomposição multi-parte.
+
+    Espelha ``run_query``: chama ``decompose_query`` e, quando a pergunta não é
+    decomposta, delega a ``_stream_single`` (identidade byte-identical quando a
+    flag está off). Quando decomposta em 2+ sub-perguntas, gera os deltas de
+    cada sub pelo mesmo funil, acumula as respostas e recombina via
+    ``_merge_sub_results`` no final, retornando ``(citations, is_cold_start)``
+    conforme a política parcial (todas-miss → ``([], True)``; ≥1 hit →
+    citações re-numeradas, ``False``).
+
+    Protocolo-agnóstico: nada sabe de SSE.
+
+    Parameters
+    ----------
+    question : str
+        Pergunta do usuário.
+    stores : dict
+        Mapeamento ``DocType → Chroma`` (de ``get_all_vectorstores``).
+    profile : UserProfile
+        Perfil do usuário para selecionar temperatura, max_tokens e prompt.
+    settings : Settings | None
+        Configurações. Se ``None``, usa o singleton ``get_settings()``.
+    doc_types : list[DocType] | None
+        Filtro opcional de tipos de documento (via ``select_collections``).
+
+    Yields
+    ------
+    str
+        Cada chunk de texto gerado pelo LLM (na ordem das sub-perguntas).
+
+    Returns
+    -------
+    tuple[list[CitationItem], bool]
+        ``(citações_válidas, is_cold_start)``. Em cold start (retrieval vazio
+        ou resposta sem citações válidas) retorna ``([], True)`` sem chamar o
+        LLM quando o retrieval é vazio.
+    """
+    if settings is None:
+        settings = get_settings()
+
+    subs = decompose_query(question, settings)
+
+    if len(subs) == 1:
+        gen = _stream_single(question, stores, profile, settings, doc_types)
+        try:
+            while True:
+                try:
+                    yield next(gen)
+                except StopIteration as stop:
+                    _, citations, is_cold_start = stop.value
+                    return citations, is_cold_start
+        finally:
+            gen.close()
+
+    sub_results: list[GenerationResult] = []
+    for sub in subs:
+        gen = _stream_single(sub, stores, profile, settings, doc_types)
+        try:
+            full = ""
+            while True:
+                try:
+                    chunk = next(gen)
+                except StopIteration as stop:
+                    full, citations, is_cold_start = stop.value
+                    break
+                full += chunk
+                yield chunk
+        finally:
+            gen.close()
+        sub_results.append(
+            GenerationResult(
+                answer=full,
+                citations=citations,
+                profile=profile,
+                disclaimer=settings.disclaimer,
+                is_cold_start=is_cold_start,
+            )
+        )
+
+    merged = _merge_sub_results(subs, sub_results, settings)
+    return merged.citations, merged.is_cold_start
 
 
 def build_stream_chain(
