@@ -800,8 +800,8 @@ class TestStreamDecompose:
             gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
             deltas, (citations, is_cold_start) = _consume(gen)
 
-        # deltas concatenados = resposta streamada (sub1 + sub2 raw)
-        assert "".join(deltas) == "A [1].B [1]."
+        # deltas concatenados = merged síncrono (separador + remap de [N])
+        assert "".join(deltas) == "A [1].\n\nB [2]."
         assert is_cold_start is False
         # citações re-numeradas no espaço 1-based único
         assert [c.index for c in citations] == [1, 2]
