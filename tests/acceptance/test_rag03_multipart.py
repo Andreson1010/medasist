@@ -370,6 +370,56 @@ def test_mp03_all_hits_validated_and_renumbered(mocker, client):
     assert result.unanswered_sub_questions == []
 
 
+def test_mp03_non_contiguous_citations_no_collision(mocker, client):
+    """RAG-03 fix (HIGH): sub com citações NÃO-contíguas não colide no merge.
+
+    Uma sub recupera 3 chunks mas o LLM cita apenas ``[1]`` e ``[3]`` (``[2]``
+    não referenciada — ``validate_citations`` preserva os índices ORIGINAIS,
+    deixando o conjunto {1, 3} não-contíguo). A re-numeração por deslocamento
+    linear (``len``) faria a sub seguinte colidir num índice já usado. A
+    re-numeração SEQUENCIAL via mapa produz índices únicos 1..M com ``[N]``
+    apontando 1:1 para a fonte.
+    """
+    settings = _settings()
+    chunks = [
+        ("A dose inicial de dipirona é 500 mg.", "Posologia", "2"),
+        ("A dose máxima de dipirona é 1000 mg.", "Posologia", "3"),
+        ("Em idosos, reduzir a dose pela metade.", "Geriatria", "5"),
+        ("Não tomar dipirona com álcool durante o tratamento.", "Interações", "4"),
+    ]
+    store = _bula_store(client, _TopicEmbeddings(), settings, chunks=chunks)
+    stores = {DocType.BULA: store}
+    _patch_split_llm(mocker, "\n".join(_SUBS))
+    _patch_gen_llm(
+        mocker,
+        [
+            "Dose inicial de dipirona: 500 mg [1]; em idosos reduzir a dose [3].",
+            "Evite álcool durante o tratamento [1].",
+        ],
+    )
+
+    result = run_query(_COMPOUND, stores, UserProfile.MEDICO, settings)
+
+    assert result.is_cold_start is False
+    # sub1 {1,3} → {1,2}; sub2 {1} → {3}: sem colisão, índices únicos 1..M
+    assert result.answer == (
+        "Dose inicial de dipirona: 500 mg [1]; em idosos reduzir a dose [2]."
+        "\n\nEvite álcool durante o tratamento [3]."
+    )
+    indices = [c.index for c in result.citations]
+    assert indices == [1, 2, 3]
+    assert len(set(indices)) == 3  # sem colisão (regra 1:1 citação↔fonte)
+    # cada [N] aponta 1:1 para a fonte certa (seções na ordem das sub)
+    assert [c.section for c in result.citations] == [
+        "Posologia",
+        "Geriatria",
+        "Interações",
+    ]
+    # todo [N] do texto tem CitationItem correspondente
+    markers = [int(m) for m in re.findall(r"\[(\d+)\]", result.answer)]
+    assert markers == indices
+
+
 # ---------------------------------------------------------------------------
 # MP-04 / merged com ≥1 citação válida + disclaimer médico
 # ---------------------------------------------------------------------------

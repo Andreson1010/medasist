@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -495,6 +496,56 @@ class TestRunQueryDecompose:
         assert result.citations[2].source == "bula_c.pdf"
         assert result.unanswered_sub_questions == []
 
+    def test_merge_non_contiguous_citations_no_collision(self) -> None:
+        """RAG-03 fix: sub com citações NÃO-contíguas não colide no merge.
+
+        sub1 cita ``[1]`` e ``[3]`` (``[2]`` não referenciada — validate_citations
+        preserva os índices ORIGINAIS, deixando o conjunto {1, 3}); sub2 cita
+        ``[1]`` e ``[2]``. Com o deslocamento linear por ``len`` (antigo), sub2
+        viraria ``[3]`` e ``[4]`` colidindo com o ``[3]`` de sub1. A re-numeração
+        SEQUENCIAL via mapa produz índices únicos 1..M.
+        """
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._run_single",
+                side_effect=[
+                    _result(
+                        "Dose A [1] e interação B [3].",
+                        [
+                            CitationItem(1, "a.pdf", "Posologia", "1"),
+                            CitationItem(3, "b.pdf", "Interação", "2"),
+                        ],
+                    ),
+                    _result(
+                        "Evite [1] e [2].",
+                        [
+                            CitationItem(1, "c.pdf", "Advertência", "3"),
+                            CitationItem(2, "d.pdf", "Advertência", "4"),
+                        ],
+                    ),
+                ],
+            ),
+        ):
+            result = run_query("composta?", stores, UserProfile.MEDICO, settings)
+
+        assert result.is_cold_start is False
+        assert result.answer == ("Dose A [1] e interação B [2].\n\nEvite [3] e [4].")
+        # índices únicos 1..M, sem colisão (regra médica 1:1 citação↔fonte)
+        assert [c.index for c in result.citations] == [1, 2, 3, 4]
+        assert len({c.index for c in result.citations}) == 4
+        assert result.citations[0].source == "a.pdf"
+        assert result.citations[1].source == "b.pdf"
+        assert result.citations[2].source == "c.pdf"
+        assert result.citations[3].source == "d.pdf"
+        # todo [N] do merged tem CitationItem correspondente (1:1)
+        markers = {int(m) for m in re.findall(r"\[(\d+)\]", result.answer)}
+        assert markers == {c.index for c in result.citations}
+
     def test_some_miss_unanswered(self) -> None:
         settings = _make_decompose_settings()
         stores = MagicMock()
@@ -805,6 +856,52 @@ class TestStreamDecompose:
         assert is_cold_start is False
         # citações re-numeradas no espaço 1-based único
         assert [c.index for c in citations] == [1, 2]
+
+    def test_non_contiguous_citations_no_collision(self) -> None:
+        """RAG-03 fix: streaming com sub NÃO-contígua → índices únicos 1..M.
+
+        sub1 cita ``[1]`` e ``[3]`` (``[2]`` não referenciada) e sub2 cita
+        ``[1]`` e ``[2]``; o mapa sequencial renumera para 1..4 sem colisão,
+        com paridade com o merged síncrono.
+        """
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+        results = [
+            _stream_result(
+                "Dose A ",
+                "[1] e interação B [3].",
+                full_answer="Dose A [1] e interação B [3].",
+                citations=[
+                    CitationItem(1, "a.pdf", "S", "1"),
+                    CitationItem(3, "b.pdf", "S", "2"),
+                ],
+                is_cold_start=False,
+            ),
+            _stream_result(
+                "Evite ",
+                "[1] e [2].",
+                full_answer="Evite [1] e [2].",
+                citations=[
+                    CitationItem(1, "c.pdf", "S", "3"),
+                    CitationItem(2, "d.pdf", "S", "4"),
+                ],
+                is_cold_start=False,
+            ),
+        ]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch("medasist.generation.chain._stream_single", side_effect=results),
+        ):
+            gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        assert "".join(deltas) == ("Dose A [1] e interação B [2].\n\nEvite [3] e [4].")
+        assert is_cold_start is False
+        # índices únicos 1..M, sem colisão (paridade com o sync)
+        assert [c.index for c in citations] == [1, 2, 3, 4]
+        assert len({c.index for c in citations}) == 4
 
     def test_partial_cold_start(self) -> None:
         settings = _make_decompose_settings()
