@@ -682,6 +682,164 @@ def _consume(gen: Any) -> tuple[list[str], tuple[list[CitationItem], bool]]:
     return deltas, terminal
 
 
+# ---------------------------------------------------------------------------
+# stream_answer — decomposição multi-parte (RAG-03)
+# ---------------------------------------------------------------------------
+
+
+def _stream_result(
+    *deltas: str,
+    full_answer: str,
+    citations: list[CitationItem],
+    is_cold_start: bool,
+) -> Any:
+    """Gerador fake de ``_stream_single`` que yield deltas e retorna o terminal."""
+
+    def gen() -> Any:
+        yield from deltas
+        return full_answer, citations, is_cold_start
+
+    return gen()
+
+
+class TestStreamDecompose:
+    def test_deltas_concatenate_to_merged(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+        results = [
+            _stream_result(full_answer="", citations=[], is_cold_start=True),
+            _stream_result(
+                "B ", "[1].",
+                full_answer="B [1].",
+                citations=[CitationItem(1, "b.pdf", "S", "1")],
+                is_cold_start=False,
+            ),
+        ]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._stream_single", side_effect=results
+            ),
+        ):
+            gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        assert "".join(deltas) == "B [1]."
+        assert is_cold_start is False
+        assert [c.index for c in citations] == [1]
+
+    def test_two_hits_renumbered(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+        results = [
+            _stream_result(
+                "A ", "[1].",
+                full_answer="A [1].",
+                citations=[CitationItem(1, "a.pdf", "S", "1")],
+                is_cold_start=False,
+            ),
+            _stream_result(
+                "B ", "[1].",
+                full_answer="B [1].",
+                citations=[CitationItem(1, "b.pdf", "S", "1")],
+                is_cold_start=False,
+            ),
+        ]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._stream_single", side_effect=results
+            ),
+        ):
+            gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        # deltas concatenados = resposta streamada (sub1 + sub2 raw)
+        assert "".join(deltas) == "A [1].B [1]."
+        assert is_cold_start is False
+        # citações re-numeradas no espaço 1-based único
+        assert [c.index for c in citations] == [1, 2]
+
+    def test_partial_cold_start(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+        results = [
+            _stream_result(
+                "A ", "[1].",
+                full_answer="A [1].",
+                citations=[CitationItem(1, "a.pdf", "S", "1")],
+                is_cold_start=False,
+            ),
+            _stream_result(full_answer="", citations=[], is_cold_start=True),
+        ]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._stream_single", side_effect=results
+            ),
+        ):
+            gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        assert "".join(deltas) == "A [1]."
+        assert is_cold_start is False
+        assert [c.index for c in citations] == [1]
+
+    def test_all_miss_cold_start(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+        results = [
+            _stream_result(full_answer="", citations=[], is_cold_start=True),
+            _stream_result(full_answer="", citations=[], is_cold_start=True),
+        ]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._stream_single", side_effect=results
+            ),
+        ):
+            gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        assert deltas == []
+        assert (citations, is_cold_start) == ([], True)
+
+    def test_flag_off_identity(self) -> None:
+        settings = _make_settings()  # decomposição desabilitada
+        stores = MagicMock()
+        result = _stream_result(
+            "Olá ", "mundo [1].",
+            full_answer="Olá mundo [1].",
+            citations=[CitationItem(1, "a.pdf", "S", "1")],
+            is_cold_start=False,
+        )
+
+        with (
+            patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
+            patch(
+                "medasist.generation.chain._stream_single", return_value=result
+            ) as mock_single,
+        ):
+            gen = stream_answer("qual a dose?", stores, UserProfile.MEDICO, settings)
+            deltas, (citations, is_cold_start) = _consume(gen)
+
+        mock_split.assert_not_called()
+        mock_single.assert_called_once_with(
+            "qual a dose?", stores, UserProfile.MEDICO, settings, None
+        )
+        assert "".join(deltas) == "Olá mundo [1]."
+        assert is_cold_start is False
+        assert [c.index for c in citations] == [1]
+
+
 class TestStreamAnswer:
     def test_deltas_concatenate_to_answer(self) -> None:
         settings = _make_settings()
