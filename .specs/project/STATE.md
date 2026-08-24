@@ -1,7 +1,7 @@
 # State
 
-**Last Updated:** 2026-08-20
-**Current Work:** RAG-03 Query transformation — sub-feature **rewrite/expand de queries curtas antes do retrieval** concluída e mergeada (PR #25, rebase + fast-forward, commits `5455567`/`152f7d6`/`7624995`). Decomposição de perguntas multi-parte segue **adiada** (backlog). Próximo passo: decidir entre RAG-05 (streaming SSE) e demais itens do M4/backlog.
+**Last Updated:** 2026-08-24
+**Current Work:** RAG-05 Streaming SSE — **em implementação** na branch `feature/rag-05-streaming-sse` (worktree em `.opencode/worktrees/rag-05-streaming-sse`). Spec/design/tasks prontos e feature implementada (config `generation_streaming_enabled`, `stream_answer`/`build_stream_chain`, endpoint `POST /query/stream` via SSE, UI com `st.write_stream` + `ui/client.py`, testes de aceite/unit). Worktree **1 commit à frente do origin** (`3b09816`), working tree limpo — falta code review, push e merge. Anterior: RAG-03 (rewrite/expand de queries curtas) concluída e mergeada (PR #25, commits `5455567`/`152f7d6`/`7624995`/`62aaf97`); decomposição multi-parte segue **adiada** (backlog).
 
 ---
 
@@ -174,6 +174,7 @@ Nenhum blocker ativo.
 | 016 | RAG-04: citações com página/seção + guarda lexical (PR #22) | 2026-08-18 | Done |
 | 017 | RAG-01: reranking cross-encoder + MRR (PR #23) | 2026-08-19 | Done |
 | 018 | RAG-03: reescrita/expansão de consultas curtas (PR #25) | 2026-08-20 | Done |
+| 019 | RAG-05: streaming SSE (branch `feature/rag-05-streaming-sse`) | 2026-08-24 | In progress |
 
 ---
 
@@ -199,6 +200,7 @@ Nenhum blocker ativo.
 - [x] RAG-04: citações com página/seção + guarda lexical (AD-012) — PR #22 merged
 - [x] RAG-01: reranking cross-encoder + MRR (AD-013) — PR #23 merged
 - [x] RAG-03: rewrite/expand de consultas curtas (AD-014) — PR #25 merged
+- [ ] RAG-05: streaming SSE — em implementação na branch `feature/rag-05-streaming-sse` (worktree 1 commit à frente do origin); pendente review/push/merge
 
 ---
 
