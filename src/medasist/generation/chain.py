@@ -13,11 +13,13 @@ from medasist.config import Settings, get_settings
 from medasist.generation.citations import (
     CitationItem,
     build_citations,
+    remap_answer,
     validate_citations,
 )
 from medasist.generation.prompts import PromptRegistry
 from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile, get_profile_config
+from medasist.retrieval.decompose import decompose_query
 from medasist.retrieval.retriever import build_retriever, select_collections
 
 logger = logging.getLogger(__name__)
@@ -71,14 +73,14 @@ def _format_context(docs: list[Document]) -> str:
     return "\n".join(f"[{i}] {doc.page_content}" for i, doc in enumerate(docs, start=1))
 
 
-def run_query(
+def _run_single(
     question: str,
     stores: dict[Any, Any],
     profile: UserProfile,
     settings: Settings | None = None,
     doc_types: list[DocType] | None = None,
 ) -> GenerationResult:
-    """Executa o pipeline RAG completo para uma pergunta.
+    """Executa o pipeline RAG completo para uma única pergunta (sub ou total).
 
     Fluxo:
     1. Recupera documentos relevantes via ``build_retriever``.
@@ -88,10 +90,14 @@ def run_query(
     4. Chama o LLM via LCEL ``prompt | ChatOpenAI | StrOutputParser``.
     5. Valida e filtra citações órfãs.
 
+    É o corpo do antigo ``run_query`` extraído verbatim; ``run_query`` o
+    reusa para a pergunta total quando não há decomposição e para cada
+    sub-pergunta quando há.
+
     Parameters
     ----------
     question : str
-        Pergunta do usuário.
+        Pergunta (total ou sub-pergunta) do usuário.
     stores : dict
         Mapeamento ``DocType → Chroma`` (de ``get_all_vectorstores``).
     profile : UserProfile
@@ -99,10 +105,7 @@ def run_query(
     settings : Settings | None
         Configurações. Se ``None``, usa o singleton ``get_settings()``.
     doc_types : list[DocType] | None
-        Filtro opcional de tipos de documento. Quando fornecido (lista não
-        vazia), a retrieção é limitada às coleções correspondentes — um novo
-        subconjunto é construído sem nunca mutar ``stores``. Se ``None`` ou
-        lista vazia, consulta todas as coleções.
+        Filtro opcional de tipos de documento (via ``select_collections``).
 
     Returns
     -------
@@ -179,6 +182,139 @@ def run_query(
         disclaimer=settings.disclaimer,
         is_cold_start=False,
     )
+
+
+def _merge_sub_results(
+    subs: list[str],
+    sub_results: list[GenerationResult],
+    settings: Settings,
+) -> GenerationResult:
+    """Recombina sub-respostas numa resposta única com citações re-numeradas.
+
+    Para cada sub-pergunta com citação válida, remapeia os marcadores ``[N]``
+    via ``remap_answer`` por um offset acumulado e re-numera as citações num
+    espaço 1-based único; as respostas são concatenadas. Sub-perguntas sem
+    citação válida (cold start ou resposta sem fonte) não entram no merged e
+    são registradas em ``unanswered_sub_questions``. Se nenhuma sub-pergunta
+    tem citação válida, retorna cold start total (regra médica: nunca resposta
+    sem fonte).
+
+    Parameters
+    ----------
+    subs : list[str]
+        Textos das sub-perguntas, na mesma ordem de ``sub_results``.
+    sub_results : list[GenerationResult]
+        Resultados de ``_run_single`` por sub-pergunta.
+    settings : Settings
+        Configurações com textos de segurança.
+
+    Returns
+    -------
+    GenerationResult
+        Resultado merged com citações re-numeradas e disclaimer, ou cold start
+        total quando nenhuma sub-pergunta tem citação válida.
+    """
+    merged_parts: list[str] = []
+    merged_citations: list[CitationItem] = []
+    unanswered: list[str] = []
+    offset = 0
+
+    for sub, result in zip(subs, sub_results, strict=True):
+        if result.is_cold_start or not result.citations:
+            unanswered.append(sub)
+            continue
+        merged_parts.append(remap_answer(result.answer, offset))
+        for citation in result.citations:
+            merged_citations.append(
+                CitationItem(
+                    index=citation.index + offset,
+                    source=citation.source,
+                    section=citation.section,
+                    page=citation.page,
+                )
+            )
+        offset += len(result.citations)
+
+    profile = sub_results[0].profile
+
+    if not merged_citations:
+        logger.info(
+            "run_query: nenhuma sub-pergunta com citação válida — cold start total.",
+        )
+        return GenerationResult(
+            answer=settings.cold_start_message,
+            citations=[],
+            profile=profile,
+            disclaimer=settings.disclaimer,
+            is_cold_start=True,
+        )
+
+    return GenerationResult(
+        answer="\n\n".join(merged_parts),
+        citations=merged_citations,
+        profile=profile,
+        disclaimer=settings.disclaimer,
+        is_cold_start=False,
+        unanswered_sub_questions=unanswered,
+    )
+
+
+def run_query(
+    question: str,
+    stores: dict[Any, Any],
+    profile: UserProfile,
+    settings: Settings | None = None,
+    doc_types: list[DocType] | None = None,
+) -> GenerationResult:
+    """Executa o pipeline RAG completo, com decomposição multi-parte opcional.
+
+    Chama ``decompose_query``: quando a pergunta não é decomposta (flag off,
+    não-composta, falha/0/1 sub), delega a ``_run_single`` (identidade). Quando
+    decomposta em 2+ sub-perguntas, roda cada uma por ``_run_single`` e
+    recombina via ``_merge_sub_results`` (citações re-numeradas e ``[N]``
+    remapeados). Nunca fabrica conteúdo para sub-perguntas sem hit — misses
+    vão para ``unanswered_sub_questions``.
+
+    Parameters
+    ----------
+    question : str
+        Pergunta do usuário.
+    stores : dict
+        Mapeamento ``DocType → Chroma`` (de ``get_all_vectorstores``).
+    profile : UserProfile
+        Perfil do usuário para selecionar temperatura, max_tokens e prompt.
+    settings : Settings | None
+        Configurações. Se ``None``, usa o singleton ``get_settings()``.
+    doc_types : list[DocType] | None
+        Filtro opcional de tipos de documento (via ``select_collections``).
+
+    Returns
+    -------
+    GenerationResult
+        Resultado com resposta, citações, perfil, disclaimer, flag de cold start
+        e sub-perguntas não respondidas.
+    """
+    if settings is None:
+        settings = get_settings()
+
+    subs = decompose_query(question, settings)
+    if len(subs) == 1:
+        return _run_single(question, stores, profile, settings, doc_types)
+
+    sub_results = [
+        _run_single(sub, stores, profile, settings, doc_types) for sub in subs
+    ]
+    merged = _merge_sub_results(subs, sub_results, settings)
+
+    hits = sum(1 for r in sub_results if not r.is_cold_start and r.citations)
+    misses = len(sub_results) - hits
+    logger.info(
+        "run_query: pergunta composta — %d sub-pergunta(s), hits=%d, misses=%d.",
+        len(subs),
+        hits,
+        misses,
+    )
+    return merged
 
 
 def build_chain(
