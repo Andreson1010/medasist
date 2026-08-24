@@ -46,6 +46,21 @@ def _make_settings(
     settings.retrieval_score_threshold = 0.4
     settings.llm_max_retries = 2
     settings.llm_request_timeout = 60.0
+    settings.retrieval_decompose_enabled = False
+    return settings
+
+
+def _make_decompose_settings(**overrides: object) -> MagicMock:
+    """Settings com decomposição habilitada e overrides por critério."""
+    settings = _make_settings()
+    settings.retrieval_decompose_enabled = True
+    settings.retrieval_decompose_max_sub_questions = 5
+    settings.retrieval_decompose_model = "phi-3-mini"
+    settings.retrieval_decompose_temperature = 0.0
+    settings.retrieval_decompose_max_tokens = 256
+    settings.retrieval_decompose_min_content_tokens = 4
+    for key, value in overrides.items():
+        setattr(settings, key, value)
     return settings
 
 
@@ -386,6 +401,248 @@ class TestRunQueryNormal:
             max_retries=4,
             request_timeout=90.0,
         )
+
+
+# ---------------------------------------------------------------------------
+# run_query — decomposição multi-parte (RAG-03)
+# ---------------------------------------------------------------------------
+
+
+def _result(
+    answer: str = "resposta",
+    citations: list[CitationItem] | None = None,
+    is_cold_start: bool = False,
+) -> GenerationResult:
+    return GenerationResult(
+        answer=answer,
+        citations=citations or [],
+        profile=UserProfile.MEDICO,
+        disclaimer="d",
+        is_cold_start=is_cold_start,
+    )
+
+
+class TestRunQueryDecompose:
+    def test_flag_off_identity_single_run(self) -> None:
+        settings = _make_settings()  # decomposição desabilitada
+        stores = MagicMock()
+        expected = _result(
+            answer="r", citations=[CitationItem(1, "a.pdf", "S", "1")]
+        )
+
+        with (
+            patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
+            patch("medasist.generation.chain._run_single") as mock_single,
+        ):
+            mock_single.return_value = expected
+            result = run_query("qual a dose?", stores, UserProfile.MEDICO, settings)
+
+        mock_split.assert_not_called()
+        mock_single.assert_called_once_with(
+            "qual a dose?", stores, UserProfile.MEDICO, settings, None
+        )
+        assert result == expected
+
+    def test_single_sub_identity(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        expected = _result()
+
+        with (
+            patch(
+                "medasist.generation.chain.decompose_query",
+                return_value=["qual a dose?"],
+            ),
+            patch("medasist.generation.chain._run_single") as mock_single,
+        ):
+            mock_single.return_value = expected
+            result = run_query("qual a dose?", stores, UserProfile.MEDICO, settings)
+
+        assert result == expected
+        mock_single.assert_called_once_with(
+            "qual a dose?", stores, UserProfile.MEDICO, settings, None
+        )
+
+    def test_merge_renumbers_and_remaps(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["Qual a dose de Alphazol?", "Posso tomar Alphazol com Betazol?"]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._run_single",
+                side_effect=[
+                    _result(
+                        "Dose: 500 mg [1].",
+                        [CitationItem(1, "bula_a.pdf", "Posologia", "1")],
+                    ),
+                    _result(
+                        "Evite [1] e [2].",
+                        [
+                            CitationItem(1, "bula_b.pdf", "Interação", "2"),
+                            CitationItem(2, "bula_c.pdf", "Advertência", "3"),
+                        ],
+                    ),
+                ],
+            ),
+        ):
+            result = run_query("composta?", stores, UserProfile.MEDICO, settings)
+
+        assert result.is_cold_start is False
+        assert result.answer == "Dose: 500 mg [1].\n\nEvite [2] e [3]."
+        assert [c.index for c in result.citations] == [1, 2, 3]
+        assert result.citations[0].source == "bula_a.pdf"
+        assert result.citations[1].source == "bula_b.pdf"
+        assert result.citations[2].source == "bula_c.pdf"
+        assert result.unanswered_sub_questions == []
+
+    def test_some_miss_unanswered(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2", "s3"]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._run_single",
+                side_effect=[
+                    _result("A [1].", [CitationItem(1, "a.pdf", "S", "1")]),
+                    _result(is_cold_start=True),
+                    _result("C [1].", [CitationItem(1, "c.pdf", "S", "1")]),
+                ],
+            ),
+        ):
+            result = run_query("q?", stores, UserProfile.MEDICO, settings)
+
+        assert result.is_cold_start is False
+        assert result.unanswered_sub_questions == ["s2"]
+        assert result.answer == "A [1].\n\nC [2]."
+        assert [c.index for c in result.citations] == [1, 2]
+
+    def test_all_miss_cold_start_total(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._run_single",
+                side_effect=[_result(is_cold_start=True), _result(is_cold_start=True)],
+            ),
+        ):
+            result = run_query("q?", stores, UserProfile.MEDICO, settings)
+
+        assert result.is_cold_start is True
+        assert result.answer == settings.cold_start_message
+        assert result.citations == []
+        assert result.unanswered_sub_questions == []
+
+    def test_sub_without_valid_citation_is_miss(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["s1", "s2"]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._run_single",
+                side_effect=[
+                    _result("A [1].", [CitationItem(1, "a.pdf", "S", "1")]),
+                    _result("sem citação"),
+                ],
+            ),
+        ):
+            result = run_query("q?", stores, UserProfile.MEDICO, settings)
+
+        assert result.is_cold_start is False
+        assert result.unanswered_sub_questions == ["s2"]
+        assert result.answer == "A [1]."
+        assert [c.index for c in result.citations] == [1]
+
+    def test_each_sub_passes_funnel(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        question = "Qual a dose de Alphazol ou posso tomar com Betazol?"
+        subs = ["Qual a dose de Alphazol?", "Posso tomar Alphazol com Betazol?"]
+        split_instance = MagicMock()
+        split_instance.return_value = AIMessage(content="\n".join(subs))
+        invoked: list[str] = []
+
+        def _builder(stores, settings):
+            retriever = MagicMock()
+
+            def _invoke(q):
+                invoked.append(q)
+                return [_make_doc("texto [1]")]
+
+            retriever.invoke.side_effect = _invoke
+            return retriever
+
+        gen_instance = MagicMock()
+        gen_instance.return_value = AIMessage(content="Resposta [1].")
+
+        with (
+            patch(
+                "medasist.retrieval.decompose.ChatOpenAI",
+                return_value=split_instance,
+            ),
+            patch(
+                "medasist.generation.chain.build_retriever", side_effect=_builder
+            ),
+            patch("medasist.generation.chain.ChatOpenAI", return_value=gen_instance),
+        ):
+            result = run_query(question, stores, UserProfile.MEDICO, settings)
+
+        assert invoked == subs
+        assert result.is_cold_start is False
+        assert [c.index for c in result.citations] == [1, 2]
+
+    def test_cap_respected(self) -> None:
+        settings = _make_decompose_settings(
+            retrieval_decompose_max_sub_questions=5
+        )
+        stores = MagicMock()
+        question = "Qual a dose de Alphazol ou posso tomar com Betazol?"
+        split_instance = MagicMock()
+        split_instance.return_value = AIMessage(
+            content="\n".join(f"sub {i}" for i in range(7))
+        )
+
+        with (
+            patch(
+                "medasist.retrieval.decompose.ChatOpenAI",
+                return_value=split_instance,
+            ),
+            patch(
+                "medasist.generation.chain._run_single",
+                return_value=_result(is_cold_start=True),
+            ) as mock_single,
+        ):
+            run_query(question, stores, UserProfile.MEDICO, settings)
+
+        assert mock_single.call_count == 5
+
+    def test_sub_questions_only_as_each_sub_question(self) -> None:
+        settings = _make_decompose_settings()
+        stores = MagicMock()
+        subs = ["sub A", "sub B"]
+
+        with (
+            patch("medasist.generation.chain.decompose_query", return_value=subs),
+            patch(
+                "medasist.generation.chain._run_single",
+                side_effect=[
+                    _result("A [1].", [CitationItem(1, "a.pdf", "S", "1")]),
+                    _result("B [1].", [CitationItem(1, "b.pdf", "S", "1")]),
+                ],
+            ) as mock_single,
+        ):
+            run_query("composta?", stores, UserProfile.MEDICO, settings)
+
+        questions = [call.args[0] for call in mock_single.call_args_list]
+        assert questions == ["sub A", "sub B"]
 
 
 # ---------------------------------------------------------------------------
