@@ -170,7 +170,7 @@ Nenhuma obrigatória. A UI (Streamlit) não precisa mudar para a feature funcion
 - `tests/retrieval/test_decompose.py` (new): `_is_compound` (composta vs não-composta no limite `min_tokens`, conectores `e`/`ou`/`e/ou` no texto bruto + vírgula, exemplos positivos/negativos do Q4 — P1 "Qual a dose de dipirona e posso tomar com álcool?" composta; "Alphazol", "Alphazol causa sonolência intensa", "Alphazol ou Betazol" (min=4), "qual a dose para" não-composta), `decompose_query` — identidade flag off (MP-01), não-composta sem LLM (MP-02/gate), LLM falha/timeout → identidade + `logger.exception` sem propagar (MP-07), saída malformada/vazia → identidade (MP-07), cap `max_sub_questions` (MP-05), 1 sub-pergunta → identidade (MP-08), 2+ sub-perguntas parseadas (MP-02), resolução do modelo (MP-02).
 - `tests/generation/test_chain.py` (modify): `_run_single`/`run_query` — identidade flag off (MP-01), decomposição 2 subs com merge + re-numeração (MP-03/04), todas-miss cold start total (MP-09), algumas-miss com `unanswered_sub_questions` (MP-10), sub sem citação válida tratada como miss (MP-11), `_is_compound`/gate não chama split (MP-02), reescrita por sub-pergunta (MP-06); `stream_answer` — deltas concatenados = merged + citações re-numeradas + cold start parcial (MP-14).
 - `tests/config/test_config.py` (modify): `TestSettingsDecompose` — defaults (`enabled=False`, `max_sub_questions=5`, `min_tokens=4`, modelo resolve para `lm_studio_llm_model`, `temperature=0.0`, `max_tokens=256`), override por env (MP-01/02/05), constraints inválidas (`max_sub_questions=0`, `min_tokens=0`, `temperature=-0.1/2.1`, `max_tokens=0` → `ValidationError`).
-- `tests/generation/test_citations.py` (modify): `remap_answer` — shift de `[N]` por offset, sem alterar texto sem marcadores.
+- `tests/generation/test_citations.py` (modify): `remap_answer` — reescrita de `[N]` via mapa `{índice original: índice global}`, remoção de fora-do-mapa, sem alterar texto sem marcadores.
 
 **Integration (API):**
 - `tests/api/test_query.py` (modify): `QueryResponse.unanswered_sub_questions` serialização (default `[]`; preenchido quando decomposição parcial) — retrocompatibilidade com respostas existentes (MP-10).
@@ -191,7 +191,7 @@ Nenhuma obrigatória. A UI (Streamlit) não precisa mudar para a feature funcion
 |------|-------------|-----|
 | `src/medasist/retrieval/decompose.py` | New | Módulo com `_is_compound` (heurística determinística), `_split` (ChatOpenAI lazy) e público `decompose_query(query, settings) -> list[str]`; `_TOKEN_RE` local (sem import circular); template de prompt module-level |
 | `src/medasist/generation/chain.py` | Modify | Refatorar `run_query` → `_run_single` (corpo atual) + hook `decompose_query` + `_merge_sub_results`; `GenerationResult.unanswered_sub_questions`; `stream_answer` com paridade de decomposição |
-| `src/medasist/generation/citations.py` | Modify | Helper `remap_answer(answer, offset) -> str` (shift de `[N]` por offset) |
+| `src/medasist/generation/citations.py` | Modify | Helper `remap_answer(answer, index_map) -> str` (reescreve `[N]` via mapa sequencial; fora-do-mapa removido) |
 | `src/medasist/api/schemas.py` | Modify | `QueryResponse.unanswered_sub_questions: list[str] = Field(default_factory=list)` + mapeamento em `from_result` |
 | `src/medasist/config.py` | Modify | Campos `retrieval_decompose_*` no bloco Retrieval + resolução do modelo vazio em `_resolve_eval_models` |
 | `.env.example` | Modify | Documentar as novas env vars com defaults e constraints |
