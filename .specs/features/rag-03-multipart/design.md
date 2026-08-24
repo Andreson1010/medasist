@@ -86,7 +86,7 @@ graph TD
 - **Location**: `src/medasist/retrieval/decompose.py`
 - **Interfaces**:
   - `decompose_query(query: str, settings: Settings) -> list[str]` — público. Flag off → `[query]`; não-composta → `[query]` (sem LLM); composta → split + cap; falha/malformado/0/1 → `[query]`.
-  - `_is_compound(query: str, settings: Settings) -> bool` — heurística determinística (Q4).
+  - `_is_compound(query: str, settings: Settings) -> bool` — heurística determinística (Q4): gate em tokens TOTAIS (`retrieval_decompose_min_tokens`) + conectores `e`/`ou`/`e/ou` no texto bruto (pré-stopwords) ou vírgula seguida de tokens de conteúdo.
   - `_split(query: str, settings: Settings) -> list[str]` — privado; `ChatOpenAI` lazy, parse linha a linha, strip/filtra vazias.
 - **Dependencies**: `Settings`, `_TOKEN_RE` local, `_DECOMPOSE_PROMPT` (PromptTemplate), `StrOutputParser`, `ChatOpenAI` lazy.
 - **Reuses**: padrão de `query_rewrite.py` (lazy `ChatOpenAI`, `_TOKEN_RE` local, prompt module-level, `logger.exception`).
@@ -124,7 +124,7 @@ graph TD
 
 - **Purpose**: Configurar a decomposição (flag, cap, modelo, temperatura, max_tokens, gate).
 - **Location**: `src/medasist/config.py` (bloco Retrieval, ao lado de `retrieval_query_rewrite_*`)
-- **Interfaces**: campos `retrieval_decompose_enabled/max_sub_questions/model/temperature/max_tokens/min_content_tokens`; `_resolve_eval_models` resolve `retrieval_decompose_model=""` → `lm_studio_llm_model`.
+- **Interfaces**: campos `retrieval_decompose_enabled/max_sub_questions/model/temperature/max_tokens/min_tokens`; `_resolve_eval_models` resolve `retrieval_decompose_model=""` → `lm_studio_llm_model`.
 - **Reuses**: padrão de constraints e de resolução de modelo de `retrieval_query_rewrite_*`.
 
 ---
@@ -140,7 +140,7 @@ retrieval_decompose_max_sub_questions: int = Field(default=5, gt=0)
 retrieval_decompose_model: str = Field(default="")          # vazio → lm_studio_llm_model
 retrieval_decompose_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 retrieval_decompose_max_tokens: int = Field(default=256, gt=0)
-retrieval_decompose_min_content_tokens: int = Field(default=4, gt=0)
+retrieval_decompose_min_tokens: int = Field(default=4, gt=0)   # gate: mínimo de TOKENS TOTAIS (_is_compound, Q4)
 ```
 
 ### GenerationResult (chain.py) — campo aditivo
@@ -194,7 +194,7 @@ class QueryResponse(BaseModel):
 | Q1 Campo aditivo | `unanswered_sub_questions: list[str]` (default `[]`) em `GenerationResult` e `QueryResponse` | Contrato FLAT preservado; retrocompatível (decisão 2) |
 | Q2 Cap/custo | `max_sub_questions=5` + gate `_is_compound` (Q4) | Limita N×custo e evita split em não-compostas |
 | Q3 Logging | Composto (nº subs/hits/misses) + por sub (logs existentes do `retrieve`) | Observabilidade sem quebrar testes de log (aditivo) |
-| Q4 Critério composta | `_is_compound`: ≥`min_content_tokens` tokens de conteúdo E (conector `e`/`ou`/`e/ou` OU vírgula seguida de tokens); só aciona split se também retornar >1 sub | Determinístico e com custo limitado |
+| Q4 Critério composta | `_is_compound`: ≥`retrieval_decompose_min_tokens` (4) TOKENS TOTAIS (sem remoção de stopwords) E (conector `e`/`ou`/`e/ou` no texto bruto OU vírgula seguida de tokens de conteúdo); só aciona split se também retornar >1 sub | Determinístico e com custo limitado; conectores detectados no bruto pois `e` é stopword; gate em tokens totais distingue "…dipirona e …álcool?" (10 tok, composta) de "Alphazol ou Betazol" (3 tok, não-composta) |
 | Split layer | `retrieval/decompose.py` (não em `retriever.py`) | Orquestração acima do funil; cada sub chama `retrieve()`; evita import circular |
 | Merge reuso | `_merge_sub_results` + `remap_answer` compartilhados por `run_query` e `stream_answer` | Paridade P2 (MP-14); DRY |
 | Identidade flag off | `_run_single` = corpo atual de `run_query` extraído verbatim | Byte-identical garantido (MP-01) |

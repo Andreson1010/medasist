@@ -89,7 +89,8 @@ Perguntas compostas ("Qual a dose de dipirona e posso tomar com álcool?", "Quai
 - WHEN todas-miss THEN cold start total: `is_cold_start=True`, `answer=cold_start_message`, `citations=[]`, `unanswered_sub_questions=[]`.
 - WHEN algumas-miss THEN `is_cold_start=False`, resposta = concatenação dos hits com `[N]` remapeados, citações = merged re-numeradas, `unanswered_sub_questions=[texto das misses]`.
 - WHEN uma sub-pergunta hit no retrieval mas sua geração não produz citação válida THEN system SHALL tratá-la como miss (não entra no merged; registrada em `unanswered_sub_questions`).
-- WHEN a pergunta original tem sub-pergunta composta de só-stopwords THEN `_is_compound` usa tokens de conteúdo (stopwords removidas) — conectores entre cláusulas relevantes.
+- WHEN a pergunta é curta (total de tokens < `retrieval_decompose_min_tokens`, default 4) THEN `_is_compound` retorna `False` sem chamar o split — gate determinístico de custo (Q4).
+- WHEN a pergunta tem o conector `e` (que é stopword) THEN `_is_compound` detecta o conector no texto bruto (pré-remoção de stopwords), pois `e` coordena cláusulas mesmo sendo stopword (Q4).
 - WHEN sub-pergunta curta + rewrite on THEN a reescrita roda dentro do `retrieve()` daquela sub-pergunta (funnel independente, decisão 4).
 - WHEN a sub-pergunta decomposta omite o termo de medicamento na reescrita THEN a guarda lexical daquela sub-pergunta esvazia o contexto → miss (comportamento seguro, nunca contorna a guarda).
 - WHEN `stores` vazio THEN system SHALL retornar `[]`/cold start ANTES de qualquer split — o LLM de split NUNCA é chamado.
@@ -132,7 +133,7 @@ Sem modelos persistidos novos (nenhuma migração; contrato `QueryRequest` inalt
 | `retrieval_decompose_model` | `str` | `""` | `RETRIEVAL_DECOMPOSE_MODEL` | vazio resolve para `lm_studio_llm_model` | Modelo do split; default segue o principal (padrão `eval_llm_model`/`retrieval_query_rewrite_model`) |
 | `retrieval_decompose_temperature` | `float` | `0.0` | `RETRIEVAL_DECOMPOSE_TEMPERATURE` | `ge=0.0, le=2.0` | Baixa para determinismo (Q2) |
 | `retrieval_decompose_max_tokens` | `int` | `256` | `RETRIEVAL_DECOMPOSE_MAX_TOKENS` | `gt=0` | Limite de geração do LLM de split |
-| `retrieval_decompose_min_content_tokens` | `int` | `4` | `RETRIEVAL_DECOMPOSE_MIN_CONTENT_TOKENS` | `gt=0` | Gate da heurística `_is_compound` (Q4) |
+| `retrieval_decompose_min_tokens` | `int` | `4` | `RETRIEVAL_DECOMPOSE_MIN_TOKENS` | `gt=0` | Gate da heurística `_is_compound` — mínimo de TOKENS TOTAIS (Q4) |
 
 - `retrieval_decompose_model=""` resolve para `lm_studio_llm_model` via `model_validator` existente `_resolve_eval_models` (estendido — mesmo padrão de `retrieval_query_rewrite_model`).
 - `GenerationResult` (chain.py) ganha campo aditivo `unanswered_sub_questions: list[str] = field(default_factory=list)`.
@@ -166,9 +167,9 @@ Nenhuma obrigatória. A UI (Streamlit) não precisa mudar para a feature funcion
 ## Tests Required
 
 **Unit:**
-- `tests/retrieval/test_decompose.py` (new): `_is_compound` (composta vs não-composta no limite `min_content_tokens`, conectores `e`/`ou`/`,`), `decompose_query` — identidade flag off (MP-01), não-composta sem LLM (MP-02/gate), LLM falha/timeout → identidade + `logger.exception` sem propagar (MP-07), saída malformada/vazia → identidade (MP-07), cap `max_sub_questions` (MP-05), 1 sub-pergunta → identidade (MP-08), 2+ sub-perguntas parseadas (MP-02), resolução do modelo (MP-02).
+- `tests/retrieval/test_decompose.py` (new): `_is_compound` (composta vs não-composta no limite `min_tokens`, conectores `e`/`ou`/`e/ou` no texto bruto + vírgula, exemplos positivos/negativos do Q4 — P1 "Qual a dose de dipirona e posso tomar com álcool?" composta; "Alphazol", "Alphazol causa sonolência intensa", "Alphazol ou Betazol" (min=4), "qual a dose para" não-composta), `decompose_query` — identidade flag off (MP-01), não-composta sem LLM (MP-02/gate), LLM falha/timeout → identidade + `logger.exception` sem propagar (MP-07), saída malformada/vazia → identidade (MP-07), cap `max_sub_questions` (MP-05), 1 sub-pergunta → identidade (MP-08), 2+ sub-perguntas parseadas (MP-02), resolução do modelo (MP-02).
 - `tests/generation/test_chain.py` (modify): `_run_single`/`run_query` — identidade flag off (MP-01), decomposição 2 subs com merge + re-numeração (MP-03/04), todas-miss cold start total (MP-09), algumas-miss com `unanswered_sub_questions` (MP-10), sub sem citação válida tratada como miss (MP-11), `_is_compound`/gate não chama split (MP-02), reescrita por sub-pergunta (MP-06); `stream_answer` — deltas concatenados = merged + citações re-numeradas + cold start parcial (MP-14).
-- `tests/config/test_config.py` (modify): `TestSettingsDecompose` — defaults (`enabled=False`, `max_sub_questions=5`, `min_content_tokens=4`, modelo resolve para `lm_studio_llm_model`, `temperature=0.0`, `max_tokens=256`), override por env (MP-01/02/05), constraints inválidas (`max_sub_questions=0`, `min_content_tokens=0`, `temperature=-0.1/2.1`, `max_tokens=0` → `ValidationError`).
+- `tests/config/test_config.py` (modify): `TestSettingsDecompose` — defaults (`enabled=False`, `max_sub_questions=5`, `min_tokens=4`, modelo resolve para `lm_studio_llm_model`, `temperature=0.0`, `max_tokens=256`), override por env (MP-01/02/05), constraints inválidas (`max_sub_questions=0`, `min_tokens=0`, `temperature=-0.1/2.1`, `max_tokens=0` → `ValidationError`).
 - `tests/generation/test_citations.py` (modify): `remap_answer` — shift de `[N]` por offset, sem alterar texto sem marcadores.
 
 **Integration (API):**
@@ -225,7 +226,7 @@ Nenhuma obrigatória. A UI (Streamlit) não precisa mudar para a feature funcion
 | Q1 | Formato do campo aditivo de sub-perguntas não respondidas | **`unanswered_sub_questions: list[str]`** (lista dos textos das sub-perguntas que não foram respondidas), default `[]`. Aditivo em `GenerationResult` e `QueryResponse` — não altera campos existentes (contrato FLAT, decisão 2). |
 | Q2 | Limite de latência/custo | **`retrieval_decompose_max_sub_questions=5`** (cap de sub-perguntas processadas; MP-05) + gate heurístico `_is_compound` (Q4) evita chamar o split LLM em não-compostas. `retrieval_decompose_temperature=0.0` e `retrieval_decompose_max_tokens=256` para determinismo/custo. |
 | Q3 | Log/observabilidade | **Composto + por sub-pergunta.** Cada sub-pergunta já loga via `retrieve()`/`_run_single` (logs existentes); o `run_query`/`stream_answer` loga uma entrada composta (nº subs, hits, misses, `unanswered_sub_questions`, cold_start) — logging aditivo (não quebra testes de log existentes). |
-| Q4 | Critério exato de "pergunta composta" | **Heurística determinística + confirmação do split.** `_is_compound(query, settings)` é `True` quando (a) o conjunto de tokens de conteúdo (stopwords removidas via `retrieval_stopwords`) tem ≥ `retrieval_decompose_min_content_tokens` (default 4) E (b) contém um conector de coordenação (`e`, `ou`, `e/ou`) como token de conteúdo OU uma vírgula `,` seguida de mais tokens de conteúdo. A decomposição só é acionada se `_is_compound` for `True` (gate, sem chamada ao LLM caso contrário) E o LLM de split retornar >1 sub-pergunta válida. |
+| Q4 | Critério exato de "pergunta composta" | **Heurística determinística + confirmação do split.** `_is_compound(query, settings)` é `True` quando (a) o conjunto de TODOS os tokens da query (via `_TOKEN_RE`, **sem** remoção de stopwords) tem ≥ `retrieval_decompose_min_tokens` (default 4) itens E (b) contém um conector de coordenação (`e`, `ou`, `e/ou`) — detectado no **texto bruto, pré-remoção de stopwords** (`e` é stopword mas é conector) — OU uma vírgula `,` seguida de mais tokens de conteúdo (`_has_comma_with_content`). A decomposição só é acionada se `_is_compound` for `True` (gate determinístico, sem chamada ao LLM caso contrário) E o LLM de split retornar >1 sub-pergunta válida. |
 
 ---
 

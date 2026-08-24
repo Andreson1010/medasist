@@ -64,17 +64,17 @@ T9
 
 ### T1: Config de decomposição (settings + .env.example)
 
-**What:** Adicionar os campos `retrieval_decompose_*` ao bloco Retrieval de `Settings`, estender `_resolve_eval_models` para resolver `retrieval_decompose_model=""` → `lm_studio_llm_model`, e documentar todas as env vars no `.env.example` (defaults + constraints).
+**What:** Adicionar os campos `retrieval_decompose_*` ao bloco Retrieval de `Settings`, estender `_resolve_eval_models` para resolver `retrieval_decompose_model=""` → `lm_studio_llm_model`, e documentar todas as env vars no `.env.example` (defaults + constraints). **Nota (Q4 reconciliado):** o campo `retrieval_decompose_min_content_tokens` já commitado em 437f958 deve ser **RENOMEADO** para `retrieval_decompose_min_tokens` (env var `RETRIEVAL_DECOMPOSE_MIN_TOKENS`) — o gate agora mede tokens TOTAIS, não de conteúdo.
 **Where:** `src/medasist/config.py`, `.env.example`, `tests/config/test_config.py`
 **Depends on:** None
 **Reuses:** padrão de constraints e resolução de modelo de `retrieval_query_rewrite_*`; `TestSettingsQueryRewrite` como molde.
 **Requirement:** MP-01, MP-02, MP-05, MP-07
 
 **Done when:**
-- [ ] Campos `retrieval_decompose_enabled=False`, `retrieval_decompose_max_sub_questions=5 (gt=0)`, `retrieval_decompose_model=""`, `retrieval_decompose_temperature=0.0 (ge=0,le=2)`, `retrieval_decompose_max_tokens=256 (gt=0)`, `retrieval_decompose_min_content_tokens=4 (gt=0)` presentes em `Settings`.
+- [ ] Campos `retrieval_decompose_enabled=False`, `retrieval_decompose_max_sub_questions=5 (gt=0)`, `retrieval_decompose_model=""`, `retrieval_decompose_temperature=0.0 (ge=0,le=2)`, `retrieval_decompose_max_tokens=256 (gt=0)`, `retrieval_decompose_min_tokens=4 (gt=0)` presentes em `Settings`.
 - [ ] `retrieval_decompose_model=""` resolve para `lm_studio_llm_model` via `_resolve_eval_models`.
-- [ ] `TestSettingsDecompose` cobre defaults, override por env e constraints inválidas (`max_sub_questions=0`, `min_content_tokens=0`, `temperature=-0.1/2.1`, `max_tokens=0` → `ValidationError`).
-- [ ] `.env.example` documenta as 6 env vars `RETRIEVAL_DECOMPOSE_*` com defaults/constraints.
+- [ ] `TestSettingsDecompose` cobre defaults, override por env e constraints inválidas (`max_sub_questions=0`, `min_tokens=0`, `temperature=-0.1/2.1`, `max_tokens=0` → `ValidationError`).
+- [ ] `.env.example` documenta as 6 env vars `RETRIEVAL_DECOMPOSE_*` com defaults/constraints (incl. `RETRIEVAL_DECOMPOSE_MIN_TOKENS`, default 4).
 - [ ] Gate check passes: `pytest tests/config/test_config.py -v`
 - [ ] Test count: testes novos de `TestSettingsDecompose` passam (sem deleção silenciosa).
 
@@ -95,7 +95,7 @@ T9
 
 **Done when:**
 - [ ] `decompose_query`: flag off → `[query]` (MP-01); não-composta → `[query]` sem chamar o LLM de split (gate Q4/MP-02); composta → split; falha/timeout/malformado/0 → `[query]` com `logger.exception` sem propagar (MP-07); 1 sub → `[query]` (MP-08); >cap → trunca nas `max_sub_questions` primeiras (MP-05).
-- [ ] `_is_compound`: `True` apenas quando ≥`min_content_tokens` tokens de conteúdo E (conector `e`/`ou`/`e/ou` OU vírgula seguida de tokens) (Q4).
+- [ ] `_is_compound`: `True` apenas quando ≥`retrieval_decompose_min_tokens` (4) TOKENS TOTAIS (via `_TOKEN_RE`, sem remoção de stopwords) E (conector `e`/`ou`/`e/ou` no texto bruto — pré-stopwords, pois `e` é stopword mas é conector — OU vírgula seguida de tokens de conteúdo via `_has_comma_with_content`) (Q4). Exemplos: "Qual a dose de dipirona e posso tomar com álcool?" (10 tok, `e` bruto) → composta; "Alphazol" (1 tok), "Alphazol causa sonolência intensa" (sem conector), "Alphazol ou Betazol" (3 tok < 4), "qual a dose para" (sem conector) → não-composta.
 - [ ] `ChatOpenAI` lazy (import dentro de `_split`); mockável via `patch("medasist.retrieval.decompose.ChatOpenAI")`.
 - [ ] `tests/retrieval/test_decompose.py` cobre: flag off, não-composta sem LLM, LLM falha/timeout → identidade + `logger.exception`, saída malformada/vazia → identidade, cap, 1 sub → identidade, 2+ subs parseadas, resolução do modelo.
 - [ ] Gate check passes: `pytest tests/retrieval/test_decompose.py -v`
