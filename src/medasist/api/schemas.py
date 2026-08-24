@@ -204,6 +204,9 @@ class QueryResponse(BaseModel):
         Aviso médico obrigatório.
     is_cold_start : bool
         ``True`` quando nenhum chunk relevante foi encontrado.
+    unanswered_sub_questions : list[str]
+        Sub-perguntas não respondidas de uma pergunta composta (default vazio —
+        retrocompatível com respostas existentes).
     """
 
     answer: str
@@ -211,6 +214,7 @@ class QueryResponse(BaseModel):
     profile: UserProfile
     disclaimer: str
     is_cold_start: bool
+    unanswered_sub_questions: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_result(cls, result: GenerationResult) -> QueryResponse:
@@ -232,6 +236,7 @@ class QueryResponse(BaseModel):
             profile=result.profile,
             disclaimer=result.disclaimer,
             is_cold_start=result.is_cold_start,
+            unanswered_sub_questions=result.unanswered_sub_questions,
         )
 
 

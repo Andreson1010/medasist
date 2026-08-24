@@ -42,6 +42,9 @@ class GenerationResult:
     is_cold_start : bool
         ``True`` quando nenhum chunk relevante foi encontrado e o LLM
         não foi chamado.
+    unanswered_sub_questions : list[str]
+        Sub-perguntas de uma pergunta composta que não foram respondidas
+        (vazia quando não há decomposição ou quando todas foram respondidas).
     """
 
     answer: str
@@ -49,6 +52,7 @@ class GenerationResult:
     profile: UserProfile = UserProfile.MEDICO
     disclaimer: str = ""
     is_cold_start: bool = False
+    unanswered_sub_questions: list[str] = field(default_factory=list)
 
 
 def _format_context(docs: list[Document]) -> str:

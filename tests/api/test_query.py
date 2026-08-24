@@ -21,7 +21,8 @@ from medasist.api.routers.query import (
 from medasist.api.routers.query import (
     query_stream as query_stream_handler,
 )
-from medasist.api.schemas import QueryRequest
+from medasist.api.schemas import QueryRequest, QueryResponse
+from medasist.generation.chain import GenerationResult
 from medasist.generation.citations import CitationItem
 from medasist.ingestion.schemas import DocType
 from medasist.profiles.schemas import UserProfile
@@ -533,6 +534,93 @@ class TestQueryRateLimit:
             response = streaming_client.post("/query/stream", json=VALID_PAYLOAD)
         assert response.status_code == 429
         assert "text/event-stream" not in response.headers.get("content-type", "")
+
+
+class TestQueryUnansweredSubQuestions:
+    def test_default_empty_list(self) -> None:
+        result = GenerationResult(
+            answer="resposta [1].",
+            citations=[
+                CitationItem(
+                    index=1, source="bula.pdf", section="Posologia", page="1"
+                )
+            ],
+            profile=UserProfile.MEDICO,
+            disclaimer="aviso",
+            is_cold_start=False,
+        )
+        response = QueryResponse.from_result(result)
+        assert response.unanswered_sub_questions == []
+
+    def test_populated_list_serializes(self) -> None:
+        result = GenerationResult(
+            answer="parcial [1].",
+            citations=[
+                CitationItem(
+                    index=1, source="bula.pdf", section="Posologia", page="1"
+                )
+            ],
+            profile=UserProfile.MEDICO,
+            disclaimer="aviso",
+            is_cold_start=False,
+            unanswered_sub_questions=["sub não respondida 1"],
+        )
+        data = QueryResponse.from_result(result).model_dump()
+        assert data["unanswered_sub_questions"] == ["sub não respondida 1"]
+
+    def test_populated_serializes_via_api(self) -> None:
+        result = GenerationResult(
+            answer="parcial [1].",
+            citations=[
+                CitationItem(
+                    index=1, source="bula_amoxicilina.pdf", section="Posologia", page="3"
+                )
+            ],
+            profile=UserProfile.MEDICO,
+            disclaimer="aviso",
+            is_cold_start=False,
+            unanswered_sub_questions=["não respondida 1", "não respondida 2"],
+        )
+        chain = MagicMock()
+        chain.return_value = result
+        chains = dict.fromkeys(UserProfile, chain)
+
+        with (
+            patch("medasist.api.main.get_all_vectorstores", return_value={}),
+            patch(
+                "medasist.api.main.build_chain",
+                side_effect=lambda stores, profile, settings: chains[profile],
+            ),
+        ):
+            from medasist.api.main import app
+
+            with TestClient(app) as c:
+                response = c.post("/query", json=VALID_PAYLOAD)
+
+        assert response.status_code == 200
+        assert response.json()["unanswered_sub_questions"] == [
+            "não respondida 1",
+            "não respondida 2",
+        ]
+
+    def test_existing_response_remains_valid_without_field(self) -> None:
+        # Sem o campo no payload, o default [] mantém a resposta retrocompatível
+        payload = {
+            "answer": "resposta [1].",
+            "citations": [
+                {
+                    "index": 1,
+                    "source": "bula.pdf",
+                    "section": "Posologia",
+                    "page": "1",
+                }
+            ],
+            "profile": "medico",
+            "disclaimer": "aviso",
+            "is_cold_start": False,
+        }
+        response = QueryResponse.model_validate(payload)
+        assert response.unanswered_sub_questions == []
 
 
 class TestStreamEventsDisconnect:
