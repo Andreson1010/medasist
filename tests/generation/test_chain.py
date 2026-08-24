@@ -58,7 +58,7 @@ def _make_decompose_settings(**overrides: object) -> MagicMock:
     settings.retrieval_decompose_model = "phi-3-mini"
     settings.retrieval_decompose_temperature = 0.0
     settings.retrieval_decompose_max_tokens = 256
-    settings.retrieval_decompose_min_content_tokens = 4
+    settings.retrieval_decompose_min_tokens = 4
     for key, value in overrides.items():
         setattr(settings, key, value)
     return settings
@@ -426,9 +426,7 @@ class TestRunQueryDecompose:
     def test_flag_off_identity_single_run(self) -> None:
         settings = _make_settings()  # decomposição desabilitada
         stores = MagicMock()
-        expected = _result(
-            answer="r", citations=[CitationItem(1, "a.pdf", "S", "1")]
-        )
+        expected = _result(answer="r", citations=[CitationItem(1, "a.pdf", "S", "1")])
 
         with (
             patch("medasist.retrieval.decompose.ChatOpenAI") as mock_split,
@@ -588,9 +586,7 @@ class TestRunQueryDecompose:
                 "medasist.retrieval.decompose.ChatOpenAI",
                 return_value=split_instance,
             ),
-            patch(
-                "medasist.generation.chain.build_retriever", side_effect=_builder
-            ),
+            patch("medasist.generation.chain.build_retriever", side_effect=_builder),
             patch("medasist.generation.chain.ChatOpenAI", return_value=gen_instance),
         ):
             result = run_query(question, stores, UserProfile.MEDICO, settings)
@@ -600,9 +596,7 @@ class TestRunQueryDecompose:
         assert [c.index for c in result.citations] == [1, 2]
 
     def test_cap_respected(self) -> None:
-        settings = _make_decompose_settings(
-            retrieval_decompose_max_sub_questions=5
-        )
+        settings = _make_decompose_settings(retrieval_decompose_max_sub_questions=5)
         stores = MagicMock()
         question = "Qual a dose de Alphazol ou posso tomar com Betazol?"
         split_instance = MagicMock()
@@ -710,7 +704,8 @@ class TestStreamDecompose:
         results = [
             _stream_result(full_answer="", citations=[], is_cold_start=True),
             _stream_result(
-                "B ", "[1].",
+                "B ",
+                "[1].",
                 full_answer="B [1].",
                 citations=[CitationItem(1, "b.pdf", "S", "1")],
                 is_cold_start=False,
@@ -719,9 +714,7 @@ class TestStreamDecompose:
 
         with (
             patch("medasist.generation.chain.decompose_query", return_value=subs),
-            patch(
-                "medasist.generation.chain._stream_single", side_effect=results
-            ),
+            patch("medasist.generation.chain._stream_single", side_effect=results),
         ):
             gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
             deltas, (citations, is_cold_start) = _consume(gen)
@@ -736,13 +729,15 @@ class TestStreamDecompose:
         subs = ["s1", "s2"]
         results = [
             _stream_result(
-                "A ", "[1].",
+                "A ",
+                "[1].",
                 full_answer="A [1].",
                 citations=[CitationItem(1, "a.pdf", "S", "1")],
                 is_cold_start=False,
             ),
             _stream_result(
-                "B ", "[1].",
+                "B ",
+                "[1].",
                 full_answer="B [1].",
                 citations=[CitationItem(1, "b.pdf", "S", "1")],
                 is_cold_start=False,
@@ -751,9 +746,7 @@ class TestStreamDecompose:
 
         with (
             patch("medasist.generation.chain.decompose_query", return_value=subs),
-            patch(
-                "medasist.generation.chain._stream_single", side_effect=results
-            ),
+            patch("medasist.generation.chain._stream_single", side_effect=results),
         ):
             gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
             deltas, (citations, is_cold_start) = _consume(gen)
@@ -770,7 +763,8 @@ class TestStreamDecompose:
         subs = ["s1", "s2"]
         results = [
             _stream_result(
-                "A ", "[1].",
+                "A ",
+                "[1].",
                 full_answer="A [1].",
                 citations=[CitationItem(1, "a.pdf", "S", "1")],
                 is_cold_start=False,
@@ -780,9 +774,7 @@ class TestStreamDecompose:
 
         with (
             patch("medasist.generation.chain.decompose_query", return_value=subs),
-            patch(
-                "medasist.generation.chain._stream_single", side_effect=results
-            ),
+            patch("medasist.generation.chain._stream_single", side_effect=results),
         ):
             gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
             deltas, (citations, is_cold_start) = _consume(gen)
@@ -802,9 +794,7 @@ class TestStreamDecompose:
 
         with (
             patch("medasist.generation.chain.decompose_query", return_value=subs),
-            patch(
-                "medasist.generation.chain._stream_single", side_effect=results
-            ),
+            patch("medasist.generation.chain._stream_single", side_effect=results),
         ):
             gen = stream_answer("q?", stores, UserProfile.MEDICO, settings)
             deltas, (citations, is_cold_start) = _consume(gen)
@@ -816,7 +806,8 @@ class TestStreamDecompose:
         settings = _make_settings()  # decomposição desabilitada
         stores = MagicMock()
         result = _stream_result(
-            "Olá ", "mundo [1].",
+            "Olá ",
+            "mundo [1].",
             full_answer="Olá mundo [1].",
             citations=[CitationItem(1, "a.pdf", "S", "1")],
             is_cold_start=False,
