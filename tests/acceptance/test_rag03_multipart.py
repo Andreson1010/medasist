@@ -741,8 +741,10 @@ def test_mp13_subs_only_as_each_sub_question(mocker, client):
 
 def test_mp14_stream_deltas_merge_and_renumber(mocker, client):
     """MP-14: ``stream_answer`` com decomposição gera deltas por sub-pergunta
-    pelo mesmo funil do ``run_query``; a concatenação dos deltas é a resposta
-    merged e o terminal retorna as citações re-numeradas 1-based."""
+    pelo mesmo funil do ``run_query``; o texto streamado (deltas concatenados)
+    coincide com o ``answer`` merged síncrono — mesmo separador ``\\n\\n`` e
+    marcadores ``[N]`` remapeados — e o terminal retorna as citações
+    re-numeradas 1-based."""
     settings = _settings()
     store = _bula_store(client, _TopicEmbeddings(), settings)
     stores = {DocType.BULA: store}
@@ -758,9 +760,9 @@ def test_mp14_stream_deltas_merge_and_renumber(mocker, client):
     gen = stream_answer(_COMPOUND, stores, UserProfile.MEDICO, settings)
     deltas, (citations, is_cold_start) = _consume(gen)
 
-    # deltas concatenados = resposta merged (as duas partes, na ordem)
+    # deltas concatenados = resposta merged síncrona (separador + remap)
     assert "".join(deltas) == (
-        "Dose de dipirona: 500 mg [1].Evite álcool durante o tratamento [1]."
+        "Dose de dipirona: 500 mg [1].\n\n" "Evite álcool durante o tratamento [2]."
     )
     assert is_cold_start is False
     # citações re-numeradas no espaço 1-based único

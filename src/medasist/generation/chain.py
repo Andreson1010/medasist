@@ -328,10 +328,13 @@ def run_query(
     hits = sum(1 for r in sub_results if not r.is_cold_start and r.citations)
     misses = len(sub_results) - hits
     logger.info(
-        "run_query: pergunta composta — %d sub-pergunta(s), hits=%d, misses=%d.",
+        "run_query: pergunta composta — %d sub-pergunta(s), hits=%d, misses=%d, "
+        "unanswered=%d, cold_start=%s.",
         len(subs),
         hits,
         misses,
+        len(merged.unanswered_sub_questions),
+        merged.is_cold_start,
     )
     return merged
 
@@ -477,12 +480,17 @@ def stream_answer(
 
     Espelha ``run_query``: chama ``decompose_query`` e, quando a pergunta não é
     decomposta, delega a ``_stream_single`` (identidade byte-identical quando a
-    flag está off). Quando decomposta em 2+ sub-perguntas, gera os deltas de
-    cada sub pelo mesmo funil, acumula as respostas e recombina via
-    ``_merge_sub_results`` no final, retornando ``(citations, is_cold_start)``
-    conforme a política parcial (todas-miss → ``([], True)``; ≥1 hit →
-    citações re-numeradas, ``False``). Com ``stores`` vazio (ou ``doc_types``
-    que filtram todas as coleções), retorna cold start antes de chamar
+    flag está off). Quando decomposta em 2+ sub-perguntas, processa cada sub
+    pelo mesmo funil; como as subs são sequenciais, antes de emitir a resposta
+    de cada sub já se conhece o offset acumulado das citações das subs
+    anteriores, então o texto de cada sub é remapeado via ``remap_answer``
+    (``[N]`` re-numerados) e o mesmo separador ``\\n\\n`` do merged síncrono é
+    usado entre subs hit — o texto streamado coincide com o ``answer`` do
+    ``run_query``. Sub-perguntas sem citação válida (miss/cold start) não
+    emitem conteúdo. O terminal retorna ``(citations, is_cold_start)`` via
+    ``_merge_sub_results`` (todas-miss → ``([], True)``; ≥1 hit → citações
+    re-numeradas, ``False``). Com ``stores`` vazio (ou ``doc_types`` que
+    filtram todas as coleções), retorna cold start antes de chamar
     ``decompose_query`` — o LLM de split nunca é chamado (edge case RAG-03).
 
     Protocolo-agnóstico: nada sabe de SSE.
@@ -540,10 +548,12 @@ def stream_answer(
             gen.close()
 
     sub_results: list[GenerationResult] = []
+    offset = 0
+    prior_hit = False
     for sub in subs:
         gen = _stream_single(sub, stores, profile, settings, doc_types)
+        full = ""
         try:
-            full = ""
             while True:
                 try:
                     chunk = next(gen)
@@ -551,18 +561,36 @@ def stream_answer(
                     full, citations, is_cold_start = stop.value
                     break
                 full += chunk
-                yield chunk
         finally:
             gen.close()
+
+        is_hit = not is_cold_start and bool(citations)
+        if not is_hit:
+            sub_results.append(
+                GenerationResult(
+                    answer=full,
+                    citations=[],
+                    profile=profile,
+                    disclaimer=settings.disclaimer,
+                    is_cold_start=True,
+                )
+            )
+            continue
+
+        if prior_hit:
+            yield "\n\n"
+        yield remap_answer(full, offset)
+        prior_hit = True
         sub_results.append(
             GenerationResult(
                 answer=full,
                 citations=citations,
                 profile=profile,
                 disclaimer=settings.disclaimer,
-                is_cold_start=is_cold_start,
+                is_cold_start=False,
             )
         )
+        offset += len(citations)
 
     merged = _merge_sub_results(subs, sub_results, settings)
     return merged.citations, merged.is_cold_start
