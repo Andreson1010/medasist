@@ -6,6 +6,7 @@ from langchain_core.documents import Document
 from medasist.generation.citations import (
     CitationItem,
     build_citations,
+    remap_answer,
     validate_citations,
 )
 
@@ -123,3 +124,27 @@ class TestValidateCitations:
         answer = "[1] texto [1] mais texto [1]."
         _, valid = validate_citations(answer, citations)
         assert len(valid) == 1
+
+
+# ---------------------------------------------------------------------------
+# remap_answer
+# ---------------------------------------------------------------------------
+
+
+class TestRemapAnswer:
+    def test_offset_zero_unchanged(self) -> None:
+        assert remap_answer("Veja [1] e [2].", 0) == "Veja [1] e [2]."
+
+    def test_positive_offset_shifts_markers(self) -> None:
+        assert remap_answer("Veja [1].", 3) == "Veja [4]."
+
+    def test_multiple_markers_shifted(self) -> None:
+        assert remap_answer("[1] e [2] e [3].", 2) == "[3] e [4] e [5]."
+
+    def test_no_markers_unchanged(self) -> None:
+        assert remap_answer("Resposta sem citações.", 5) == "Resposta sem citações."
+
+    def test_single_marker_shift_to_k_plus_one(self) -> None:
+        # [1] → [k+1] com offset k
+        assert remap_answer("[1]", 4) == "[5]"
+
