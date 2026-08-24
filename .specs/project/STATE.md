@@ -1,7 +1,7 @@
 # State
 
 **Last Updated:** 2026-08-24
-**Current Work:** RAG-05 Streaming SSE — **em implementação** na branch `feature/rag-05-streaming-sse` (worktree em `.opencode/worktrees/rag-05-streaming-sse`). Spec/design/tasks prontos e feature implementada (config `generation_streaming_enabled`, `stream_answer`/`build_stream_chain`, endpoint `POST /query/stream` via SSE, UI com `st.write_stream` + `ui/client.py`, testes de aceite/unit). Worktree **1 commit à frente do origin** (`3b09816`), working tree limpo — falta code review, push e merge. Anterior: RAG-03 (rewrite/expand de queries curtas) concluída e mergeada (PR #25, commits `5455567`/`152f7d6`/`7624995`/`62aaf97`); decomposição multi-parte segue **adiada** (backlog).
+**Current Work:** RAG-05 Streaming SSE — **concluída e mergeada** (rebase + fast-forward, PR #26, commits `0bcd5f3`/`46134c7`/`0d464fc`/`2d6abe4`/`0c75774`/`dc8485e`/`b50ec07`). Feature: endpoint `POST /query/stream` via SSE (flag `generation_streaming_enabled`, default off → 404), `stream_answer`/`build_stream_chain`, UI com `st.write_stream` + `ui/client.py`, rate limit ativo no dispatch (CRIT-01). Próximo passo: decidir entre itens do backlog/M4 (decomposição multi-parte do RAG-03, streaming fine-tune, i18n, cache de embeddings).
 
 ---
 
@@ -174,7 +174,7 @@ Nenhum blocker ativo.
 | 016 | RAG-04: citações com página/seção + guarda lexical (PR #22) | 2026-08-18 | Done |
 | 017 | RAG-01: reranking cross-encoder + MRR (PR #23) | 2026-08-19 | Done |
 | 018 | RAG-03: reescrita/expansão de consultas curtas (PR #25) | 2026-08-20 | Done |
-| 019 | RAG-05: streaming SSE (branch `feature/rag-05-streaming-sse`) | 2026-08-24 | In progress |
+| 019 | RAG-05: streaming SSE (PR #26) | 2026-08-24 | Done |
 
 ---
 
@@ -200,7 +200,7 @@ Nenhum blocker ativo.
 - [x] RAG-04: citações com página/seção + guarda lexical (AD-012) — PR #22 merged
 - [x] RAG-01: reranking cross-encoder + MRR (AD-013) — PR #23 merged
 - [x] RAG-03: rewrite/expand de consultas curtas (AD-014) — PR #25 merged
-- [ ] RAG-05: streaming SSE — em implementação na branch `feature/rag-05-streaming-sse` (worktree 1 commit à frente do origin); pendente review/push/merge
+- [x] RAG-05: streaming SSE — PR #26 merged (rebase + fast-forward)
 
 ---
 

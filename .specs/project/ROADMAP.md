@@ -193,7 +193,6 @@
 
 - Cache de embeddings para evitar re-computação
 - Multi-tenancy para múltiplas instituições
-- Streaming de respostas (SSE) no /query
 - Auth de usuários (JWT/OAuth) além do admin key
 - Indexação incremental agendada (cron/watch)
 - Suporte a outros formatos além de PDF (DOCX, HTML, XML)
