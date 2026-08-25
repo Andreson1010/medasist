@@ -13,6 +13,8 @@ from medasist.ui.app import (
     _build_stream_result,
     _check_and_warn_health,
     _delta_generator,
+    _inject_styles,
+    _render_sidebar,
     _render_streaming,
     _StreamState,
 )
@@ -97,6 +99,57 @@ class TestCheckAndWarnHealth:
             _check_and_warn_health(_BASE_URL)
 
         mock_get_health.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# TestInjectStyles
+# ---------------------------------------------------------------------------
+
+
+class TestInjectStyles:
+    def test_injects_css_with_chat_input_selector(self) -> None:
+        with patch("medasist.ui.app.st.markdown") as mock_markdown:
+            _inject_styles()
+
+        mock_markdown.assert_called_once()
+        kwargs = mock_markdown.call_args.kwargs
+        assert kwargs.get("unsafe_allow_html") is True
+        css = mock_markdown.call_args.args[0]
+        assert 'data-testid="stChatInput"' in css
+        assert "min-height: 90px" in css
+
+
+# ---------------------------------------------------------------------------
+# TestRenderSidebar
+# ---------------------------------------------------------------------------
+
+
+class TestRenderSidebar:
+    def test_clear_conversation_button_clears_messages(self) -> None:
+        session = {"messages": [{"role": "user", "content": "olá", "result": None}]}
+        with (
+            patch("medasist.ui.app.st.session_state", session),
+            patch("medasist.ui.app.st.button", return_value=True) as mock_button,
+            patch("medasist.ui.app.st.rerun") as mock_rerun,
+        ):
+            _render_sidebar(_SETTINGS)
+
+        mock_button.assert_called_once()
+        mock_rerun.assert_called_once()
+        assert session["messages"] == []
+
+    def test_button_not_pressed_keeps_messages(self) -> None:
+        session = {"messages": [{"role": "user", "content": "olá", "result": None}]}
+        with (
+            patch("medasist.ui.app.st.session_state", session),
+            patch("medasist.ui.app.st.button", return_value=False) as mock_button,
+            patch("medasist.ui.app.st.rerun") as mock_rerun,
+        ):
+            _render_sidebar(_SETTINGS)
+
+        mock_button.assert_called_once()
+        mock_rerun.assert_not_called()
+        assert len(session["messages"]) == 1
 
 
 # ---------------------------------------------------------------------------
