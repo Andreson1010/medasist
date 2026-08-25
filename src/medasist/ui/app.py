@@ -63,6 +63,25 @@ def _configure_page() -> None:
     )
 
 
+def _inject_styles() -> None:
+    """Injeta CSS para aumentar a altura da caixa de entrada do chat."""
+    st.markdown(
+        """
+        <style>
+        [data-testid="stChatInput"] > div {
+            min-height: 90px !important;
+            max-height: none !important;
+            align-items: stretch !important;
+        }
+        [data-testid="stChatInput"] textarea {
+            min-height: 82px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_sidebar(settings: Settings) -> tuple[str, list[str]]:
     """Renderiza controles na barra lateral e retorna perfil e tipos selecionados.
 
@@ -95,6 +114,11 @@ def _render_sidebar(settings: Settings) -> tuple[str, list[str]]:
         )
 
         st.divider()
+
+        if st.button("Limpar conversa", use_container_width=True):
+            st.session_state[_KEY_MESSAGES] = []
+            st.rerun()
+
         st.caption(f"⚠️ {settings.disclaimer}")
 
     return profile_key, doc_type_keys
@@ -458,6 +482,7 @@ def main() -> None:
     logging estruturado no início, antes de qualquer log relevante.
     """
     _configure_page()
+    _inject_styles()
     settings = get_settings()
     configure_logging(settings, "ui")
 
