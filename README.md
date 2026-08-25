@@ -86,11 +86,41 @@ API_PORT=8000
 ADMIN_API_KEY=troque-por-chave-segura
 
 # Retrieval
-# Chunks com score abaixo do threshold ativam o cold start
-# RETRIEVAL_SCORE_THRESHOLD=0.4
+# Chunks com distância L2 acima do threshold ativam o cold start
+RETRIEVAL_SCORE_THRESHOLD=0.4
 ```
 
 Toda configuração é gerenciada por `src/medasist/config.py` (pydantic-settings). Nunca hardcode valores — use sempre `settings.*`.
+
+---
+
+## Docker
+
+O projeto roda como dois containers orquestrados por Docker Compose:
+
+| Serviço | Porta | Dockerfile |
+|---------|-------|-----------|
+| API (FastAPI) | 8000 | `docker/api.Dockerfile` |
+| UI (Streamlit) | 8501 | `docker/ui.Dockerfile` |
+
+```bash
+# Produção (builda e sobe)
+docker compose up -d
+
+# Desenvolvimento (hot reload: src/ montado como volume)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+O LM Studio roda na máquina host — o container acessa via `http://host.docker.internal:1234/v1`. Os dados (ChromaDB, PDFs, logs) são persistidos por volumes, fora da imagem.
+
+---
+
+## CI/CD (GitHub Actions)
+
+`.github/workflows/ci.yml` roda automaticamente:
+
+1. **Em toda PR**: lint (`ruff`), formatação (`black --check`) e testes (`pytest` com cobertura ≥ 80%) — o PR fica bloqueado até passar.
+2. **No push para `main`**: além dos testes, builda e publica as imagens `api` e `ui` no **GitHub Container Registry (GHCR)** com tags `latest` + SHA do commit. As imagens ficam prontas para `docker pull` em qualquer servidor.
 
 ---
 
@@ -112,15 +142,21 @@ pytest tests/ingestion/test_chunker.py -v
 # Rodar um único teste
 pytest tests/ingestion/test_chunker.py::test_chunk_bula_respects_sections -v
 
-# Ingerir documentos (coloque PDFs em data/raw/)
-python scripts/ingest_docs.py --dir data/raw/
+# Ingerir documentos (coloque PDFs em data/raw/ e especifique o tipo)
+python scripts/ingest_docs.py --dir data/raw/bulas --doc-type bula
 
 # Avaliação RAG (offline)
 python scripts/evaluate_rag.py --dataset evals/dataset/golden_set.json
 
-# Subir API + UI
-uvicorn src.medasist.api.main:app --reload  # API
-streamlit run src/medasist/ui/app.py        # UI (outro terminal)
+# Subir API + UI localmente (sem Docker)
+python -m uvicorn medasist.api.main:app --reload  # API (outro terminal)
+streamlit run src/medasist/ui/app.py              # UI
+
+# Subir API + UI com Docker Compose (produção)
+docker compose up -d
+
+# Subir em modo desenvolvimento (hot reload de src/)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # Docs da API
 # http://localhost:8000/docs
@@ -188,9 +224,15 @@ Resposta:
     { "index": 1, "source": "bula_dipirona.pdf", "section": "Posologia", "page": 3 }
   ],
   "profile": "medico",
-  "disclaimer": "Este sistema é um auxiliar informativo e não substitui avaliação médica presencial"
+  "disclaimer": "Este sistema é um auxiliar informativo e não substitui avaliação médica presencial",
+  "is_cold_start": false,
+  "unanswered_sub_questions": []
 }
 ```
+
+### `POST /query/stream`
+
+Variante com **Server-Sent Events (SSE)** para streaming incremental da resposta. Quando `generation_streaming_enabled=True`, entrega eventos tipados (`token`, `citations`, `disclaimer`, `cold_start`, `error`, `done`) que a UI consome com `st.write_stream`. Quando a flag está off, responde 404 e a UI degrada para `/query`.
 
 ### `POST /ingest`
 
@@ -253,20 +295,25 @@ medasist/
 │   ├── config.py           # Fonte única de configuração (pydantic-settings)
 │   ├── ingestion/          # loader, chunker, metadata, pipeline
 │   ├── vectorstore/        # Cliente ChromaDB + embeddings
-│   ├── retrieval/          # Retriever multi-coleção com score threshold
-│   ├── generation/         # Chain LCEL, prompts, citações
+│   ├── retrieval/          # Retriever multi-coleção + busca híbrida/rerank
+│   ├── generation/         # Chain LCEL, prompts, citações, streaming
 │   ├── profiles/           # UserProfile enum + ProfileConfig
-│   ├── api/                # FastAPI routers
+│   ├── api/                # FastAPI routers (/query, /query/stream, /ingest)
 │   └── ui/                 # Streamlit app
 ├── tests/                  # Espelho de src/
-├── scripts/                # ingest_docs.py
+├── scripts/                # ingest_docs.py, evaluate_rag.py
+├── docker/                 # Dockerfiles da API e UI
+├── docs/                   # PRD e documentação técnica
+├── .github/workflows/      # CI (lint + testes) e CD (build/push GHCR)
 ├── data/
 │   ├── raw/                # PDFs de entrada (não versionado)
 │   └── processed/          # Artefatos processados
-├── docs/adr/               # Architecture Decision Records
 ├── .env.example
 ├── requirements.txt
+├── requirements-api.txt    # Docker da API
+├── requirements-ui.txt     # Docker da UI
 ├── requirements-dev.txt
+├── requirements.lock       # Build reproduzível no CI
 └── pyproject.toml
 ```
 
