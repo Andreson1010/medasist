@@ -1,0 +1,15 @@
+.env
+.venv/
+venv/
+chroma_db/
+data/
+logs/
+tests/
+evals/
+.git/
+.github/
+.dockerignore
+.gitignore
+*.md
+__pycache__/
+*.pyc
