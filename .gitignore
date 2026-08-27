@@ -29,12 +29,7 @@ evals/results/
 # Projeto local (não versionado)
 _claude-code/
 .agents/
-todo/
-docs/adr/
-.req-hash
 docs/
-data-gym-cache/
-.playwright-mcp/
 .opencode/worktrees/
 .ruff_cache/
 
