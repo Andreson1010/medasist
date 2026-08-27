@@ -12,6 +12,7 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.evaluation import evaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import AnswerRelevancy, ContextPrecision, ContextRecall, Faithfulness
+from ragas.run_config import RunConfig
 
 from medasist.config import Settings
 from medasist.evaluation.dataset import GoldenQuestion
@@ -80,11 +81,38 @@ class EvaluationReport:
     num_retrieval_evaluated: int
 
 
+def build_eval_run_config(settings: Settings) -> RunConfig:
+    """Constrói o ``RunConfig`` do RAGAS a partir das settings do projeto.
+
+    ``timeout`` e ``max_workers`` vêm de ``eval_timeout``/``eval_max_workers``
+    (defaults pensados para LM Studio local, que não lida bem com 16 workers
+    simultâneos do default do RAGAS).
+
+    Parameters
+    ----------
+    settings : Settings
+        Configurações com ``eval_timeout``, ``eval_max_workers`` e
+        ``llm_max_retries``.
+
+    Returns
+    -------
+    RunConfig
+        Configuração de timeout/retry/workers do judge RAGAS.
+    """
+    return RunConfig(
+        timeout=settings.eval_timeout,
+        max_workers=settings.eval_max_workers,
+        max_retries=settings.llm_max_retries,
+    )
+
+
 def build_eval_llm(settings: Settings) -> LangchainLLMWrapper:
     """Constrói o LLM judge RAGAS apontando para o LM Studio local.
 
     Usa ``eval_llm_model`` (default: ``lm_studio_llm_model``) com
-    ``temperature=0.0`` para determinismo do judge.
+    ``temperature=0.0`` para determinismo do judge. Timeout e workers
+    paralelos vêm de ``eval_timeout``/``eval_max_workers`` (defaults pensados
+    para LM Studio local, que não lida bem com 16 workers simultâneos).
 
     Parameters
     ----------
@@ -101,8 +129,11 @@ def build_eval_llm(settings: Settings) -> LangchainLLMWrapper:
         api_key=settings.lm_studio_api_key.get_secret_value(),
         model=settings.eval_llm_model,
         temperature=0.0,
+        max_retries=settings.llm_max_retries,
+        request_timeout=settings.llm_request_timeout,
     )
-    return LangchainLLMWrapper(llm)
+    run_config = build_eval_run_config(settings)
+    return LangchainLLMWrapper(llm, run_config=run_config)
 
 
 def build_eval_embeddings(settings: Settings) -> LangchainEmbeddingsWrapper:
@@ -325,6 +356,7 @@ def _evaluate_retrieval_set(
     llm: LangchainLLMWrapper,
     embeddings: LangchainEmbeddingsWrapper,
     batch_size: int,
+    run_config: RunConfig,
 ) -> Any | None:
     """Executa ``ragas.evaluate`` do conjunto de retrieval (não-cold-start).
 
@@ -344,6 +376,8 @@ def _evaluate_retrieval_set(
         Embeddings do LM Studio.
     batch_size : int
         Tamanho do lote do RAGAS.
+    run_config : RunConfig
+        Configuração de timeout/retry/workers do judge RAGAS.
 
     Returns
     -------
@@ -363,6 +397,7 @@ def _evaluate_retrieval_set(
         embeddings=embeddings,
         column_map=_COLUMN_MAP,
         batch_size=batch_size,
+        run_config=run_config,
     )
 
 
@@ -372,6 +407,7 @@ def _evaluate_generation_set(
     llm: LangchainLLMWrapper,
     embeddings: LangchainEmbeddingsWrapper,
     batch_size: int,
+    run_config: RunConfig,
 ) -> Any | None:
     """Executa ``ragas.evaluate`` do conjunto de geração (não-cold-start).
 
@@ -387,6 +423,8 @@ def _evaluate_generation_set(
         Embeddings do LM Studio.
     batch_size : int
         Tamanho do lote do RAGAS.
+    run_config : RunConfig
+        Configuração de timeout/retry/workers do judge RAGAS.
 
     Returns
     -------
@@ -406,6 +444,7 @@ def _evaluate_generation_set(
         embeddings=embeddings,
         column_map=_COLUMN_MAP,
         batch_size=batch_size,
+        run_config=run_config,
     )
 
 
@@ -527,11 +566,12 @@ def _evaluate_sets(
     """
     llm = build_eval_llm(settings)
     embeddings = build_eval_embeddings(settings)
+    run_config = build_eval_run_config(settings)
     ret_result = _evaluate_retrieval_set(
-        rows, eval_indices, llm, embeddings, batch_size
+        rows, eval_indices, llm, embeddings, batch_size, run_config
     )
     gen_result = _evaluate_generation_set(
-        rows, eval_indices, llm, embeddings, batch_size
+        rows, eval_indices, llm, embeddings, batch_size, run_config
     )
     return ret_result, gen_result
 

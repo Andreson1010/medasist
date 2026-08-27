@@ -177,6 +177,10 @@ class Settings(BaseSettings):
         ``lm_studio_embedding_model``.
     eval_batch_size : int
         Tamanho do lote nas chamadas de avaliação RAGAS (padrão: 16).
+    eval_timeout : float
+        Timeout em segundos por operação do judge RAGAS (padrão: 600).
+    eval_max_workers : int
+        Workers paralelos do judge RAGAS (padrão: 1; evita sufocar LM Studio local).
     """
 
     model_config = SettingsConfigDict(
@@ -488,6 +492,8 @@ class Settings(BaseSettings):
     eval_llm_model: str = Field(default="")
     eval_embedding_model: str = Field(default="")
     eval_batch_size: int = Field(default=16, gt=0)
+    eval_timeout: float = Field(default=600.0, gt=0)
+    eval_max_workers: int = Field(default=1, ge=1)
 
     @model_validator(mode="after")
     def _resolve_eval_models(self) -> Settings:

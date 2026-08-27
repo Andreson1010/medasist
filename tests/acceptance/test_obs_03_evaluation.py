@@ -238,7 +238,7 @@ class TestCA01GoldenSetLoads:
         golden = load_golden_set(_GOLDEN_PATH)
 
         assert isinstance(golden, GoldenSet)
-        assert golden.version == "1.0.0"
+        assert golden.version == "2.0.0"
         assert len(golden.questions) >= 1
 
         dataset = build_eval_dataset(golden.questions)
