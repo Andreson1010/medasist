@@ -15,15 +15,12 @@ logs:
 	docker compose logs -f
 
 ## Desenvolvimento (hot reload)
-.req-hash:
-	md5sum requirements-api.txt > .req-hash
+.req-hash: requirements-api.txt
+	@echo requirements alterado - rebuilding...
+	@docker compose build api
+	@certutil -hashfile requirements-api.txt MD5 | findstr /R "^[0-9A-Fa-f][0-9A-Fa-f]*$" > .req-hash
 
 dev: .req-hash
-	@if ! md5sum -c .req-hash --quiet 2>/dev/null; then \
-		echo "requirements alterado — rebuilding..."; \
-		docker compose build api; \
-		md5sum requirements-api.txt > .req-hash; \
-	fi
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 ## Ingestão de documentos (dentro do container da API)

@@ -21,6 +21,9 @@ logs/
 # Relatórios de avaliação RAG (não versionados)
 evals/results/
 
+# Sentinela de rebuild do make (hash de requirements)
+.req-hash
+
 # IDEs
 .vscode/
 .idea/
