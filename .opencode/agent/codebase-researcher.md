@@ -2,7 +2,6 @@
 name: codebase-researcher
 description: "Read-only codebase explorer. Spawn this agent BEFORE any implementation begins. Maps relevant files and their roles, documents existing patterns to follow, finds similar features already built, flags risks (timezone, multi-tenant, retry logic, auth, race conditions), and lists tests that will need updating. Use proactively whenever the user wants to build, add, implement, fix, or refactor anything in the codebase. The Researcher runs first. Always."
 mode: subagent
-color: red
 permission:
   edit: deny
   bash: deny

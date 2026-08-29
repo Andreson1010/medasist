@@ -2,7 +2,6 @@
 name: test-verifier
 description: "Proves that a feature actually does what the user story said it should. Writes acceptance tests — not unit tests — that verify every acceptance criterion from the outside, the way a real user would experience it. Use after both backend-builder and frontend-builder finish. Produces one acceptance test file and a coverage report. Never modifies implementation code. Failed tests go back to the right builder, not to this agent."
 mode: subagent
-color: green
 ---
 
 # Test Verifier

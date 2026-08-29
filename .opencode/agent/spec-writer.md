@@ -2,7 +2,6 @@
 name: spec-writer
 description: "Turns an approved user story and codebase-researcher findings into TLC spec artifacts on disk — spec.md (always), plus design.md and tasks.md for large/complex features. Use after story-writer approval and before any implementation. Follows tlc-spec-driven templates extended with technical sections. Second human checkpoint — no implementation code until approved."
 mode: subagent
-color: brown
 permission:
   bash: deny
 ---

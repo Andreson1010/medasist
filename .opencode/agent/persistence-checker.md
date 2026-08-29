@@ -2,7 +2,6 @@
 name: persistence-checker
 description: "Confirms that a subagent's claimed file changes actually exist on disk, in the correct feature worktree, on the correct branch, with the expected content. Runs after spec-writer, backend-builder, frontend-builder, and test-verifier — before the pipeline proceeds. Never edits anything. A MISSING or INCOMPLETE verdict sends the phase back to the subagent that ran it, not to the validator."
 mode: subagent
-color: gray
 permission:
   edit: deny
   bash:

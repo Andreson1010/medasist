@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "archify": {
+      "source": "tt-a1i/archify",
+      "sourceType": "github",
+      "skillPath": "archify/SKILL.md",
+      "computedHash": "e804431e81387e19fb9109f0a8f1cce1a3a2f0b56b5e89e34af116383d8a2ec6"
+    }
+  }
+                          }
