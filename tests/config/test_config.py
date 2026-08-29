@@ -563,3 +563,26 @@ class TestSettingsRetryBackoff:
                 admin_api_key=SecretStr("very-strong-key-0123456789"),
                 embedding_request_timeout=0,
             )
+
+
+class TestSettingsMonitoring:
+    def test_defaults_are_set(self) -> None:
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.monitoring_enabled is False
+        assert settings.monitoring_metrics_path == "/metrics"
+
+    def test_custom_values_accepted(self) -> None:
+        settings = Settings(
+            admin_api_key=SecretStr("very-strong-key-0123456789"),
+            monitoring_enabled=True,
+            monitoring_metrics_path="/prometheus",
+        )
+        assert settings.monitoring_enabled is True
+        assert settings.monitoring_metrics_path == "/prometheus"
+
+    def test_env_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("MONITORING_ENABLED", "true")
+        monkeypatch.setenv("MONITORING_METRICS_PATH", "/prometheus")
+        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        assert settings.monitoring_enabled is True
+        assert settings.monitoring_metrics_path == "/prometheus"

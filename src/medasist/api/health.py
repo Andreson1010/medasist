@@ -7,6 +7,7 @@ import httpx
 
 from medasist.api.schemas import DependencyHealth, DependencyStatus, HealthResponse
 from medasist.config import Settings
+from medasist.monitoring.metrics import record_dependency_health
 from medasist.vectorstore.store import get_client
 
 logger = logging.getLogger(__name__)
@@ -185,6 +186,10 @@ def check_dependencies(settings: Settings) -> HealthResponse:
         and lm_health.status is DependencyStatus.OK
     ):
         overall = DependencyStatus.OK
+    record_dependency_health(
+        "chromadb", chromadb_health.status.value, chromadb_health.latency_ms
+    )
+    record_dependency_health("lm_studio", lm_health.status.value, lm_health.latency_ms)
     return HealthResponse(
         status=overall.value,
         chromadb=chromadb_health,

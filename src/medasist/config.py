@@ -109,6 +109,13 @@ class Settings(BaseSettings):
         Nível de log (DEBUG, INFO, WARNING, ERROR, CRITICAL).
     log_dir : Path
         Diretório de saída dos logs estruturados.
+    monitoring_enabled : bool
+        Habilita a exposição de métricas Prometheus (middleware HTTP +
+        rota ``/metrics``). As métricas de negócio são sempre coletadas;
+        apenas a exposição é condicional (padrão: ``False``).
+    monitoring_metrics_path : str
+        Rota de exposição das métricas no formato Prometheus
+        (padrão: ``/metrics``).
     retrieval_top_k : int
         Número de chunks recuperados por consulta.
     retrieval_score_threshold : float
@@ -288,6 +295,10 @@ class Settings(BaseSettings):
     # Logs
     log_level: str = Field(default="INFO")
     log_dir: Path = Field(default=Path("./logs"))
+
+    # Monitoramento (Prometheus)
+    monitoring_enabled: bool = Field(default=False)
+    monitoring_metrics_path: str = Field(default="/metrics")
 
     # Retrieval
     retrieval_top_k: int = Field(default=10)

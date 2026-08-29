@@ -31,6 +31,9 @@ python-dotenv==1.1.0
 # Logging
 python-json-logger==3.3.0
 
+# Monitoramento (Prometheus)
+prometheus-client==0.26.0
+
 # Avaliação
 ragas==0.2.15
 datasets==3.6.0

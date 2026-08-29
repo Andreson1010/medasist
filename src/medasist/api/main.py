@@ -16,12 +16,14 @@ from medasist.api.routers.query import router as query_router
 from medasist.api.schemas import HealthResponse
 from medasist.config import (
     ADMIN_KEY_MIN_LENGTH,
+    Settings,
     admin_key_is_weak,
     csv_list,
     get_settings,
 )
 from medasist.generation.chain import build_chain, build_stream_chain
 from medasist.logging_setup import configure_logging
+from medasist.monitoring.metrics import install_monitoring
 from medasist.profiles.schemas import UserProfile
 from medasist.vectorstore.store import (
     build_embeddings,
@@ -73,41 +75,68 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
-app = FastAPI(
-    title="MedAssist RAG API",
-    description=(
-        "API de suporte à decisão médica baseada em RAG. "
-        "Este sistema é um auxiliar informativo e não substitui "
-        "avaliação médica presencial."
-    ),
-    version="0.1.0",
-    lifespan=lifespan,
-)
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Constrói a aplicação FastAPI com CORS, rate limit e monitoramento.
 
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    Fábrica explícita que recebe ``Settings`` opcional — usada para construir
+    a app com settings controladas em testes (monitoramento ligado/desligado)
+    sem depender do estado global de import. ``app = create_app()`` no final
+    deste módulo usa as settings reais. O ``lifespan`` segue resolvendo
+    ``get_settings()`` em runtime (mesmo comportamento de antes).
 
-_cors_settings = get_settings()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=csv_list(_cors_settings.cors_allow_origins),
-    allow_methods=csv_list(_cors_settings.cors_allow_methods),
-    allow_headers=csv_list(_cors_settings.cors_allow_headers),
-    allow_credentials=_cors_settings.cors_allow_credentials,
-)
-
-app.include_router(query_router)
-app.include_router(ingest_router)
-
-
-@app.get("/health", summary="Health check", response_model=HealthResponse)
-def health() -> HealthResponse:
-    """Verifica a saúde das dependências (ChromaDB e LM Studio).
+    Parameters
+    ----------
+    settings : Settings | None
+        Configurações usadas na montagem (CORS e monitoramento). Se ``None``,
+        usa o singleton ``get_settings()``.
 
     Returns
     -------
-    HealthResponse
-        Estado geral e saúde por dependência, com latência em ms.
+    FastAPI
+        Aplicação configurada e instrumentada.
     """
-    settings = get_settings()
-    return check_dependencies(settings)
+    cfg = settings if settings is not None else get_settings()
+
+    app = FastAPI(
+        title="MedAssist RAG API",
+        description=(
+            "API de suporte à decisão médica baseada em RAG. "
+            "Este sistema é um auxiliar informativo e não substitui "
+            "avaliação médica presencial."
+        ),
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=csv_list(cfg.cors_allow_origins),
+        allow_methods=csv_list(cfg.cors_allow_methods),
+        allow_headers=csv_list(cfg.cors_allow_headers),
+        allow_credentials=cfg.cors_allow_credentials,
+    )
+
+    install_monitoring(app, cfg.monitoring_enabled, cfg.monitoring_metrics_path)
+
+    app.include_router(query_router)
+    app.include_router(ingest_router)
+
+    @app.get("/health", summary="Health check", response_model=HealthResponse)
+    def health() -> HealthResponse:
+        """Verifica a saúde das dependências (ChromaDB e LM Studio).
+
+        Returns
+        -------
+        HealthResponse
+            Estado geral e saúde por dependência, com latência em ms.
+        """
+        settings = get_settings()
+        return check_dependencies(settings)
+
+    return app
+
+
+app = create_app()

@@ -24,6 +24,7 @@ from medasist.api.schemas import (
 from medasist.config import get_settings
 from medasist.generation.citations import CitationItem
 from medasist.ingestion.schemas import DocType
+from medasist.monitoring.metrics import record_query
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,12 @@ def query(request: Request, body: Annotated[QueryRequest, Body()]) -> QueryRespo
         latency_ms,
         doc_types,
     )
+    record_query(
+        body.profile.value,
+        result.is_cold_start,
+        len(result.citations),
+        latency_ms,
+    )
 
     return QueryResponse.from_result(result)
 
@@ -181,6 +188,12 @@ def _stream_events(
             len(citations),
             latency_ms,
             doc_types,
+        )
+        record_query(
+            body.profile.value,
+            is_cold_start,
+            len(citations),
+            latency_ms,
         )
 
 
