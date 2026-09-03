@@ -1,0 +1,21 @@
+# Targets de produção (VPS) — docker-compose.prod.yml
+# Incluído pelo Makefile principal via `-include Makefile.prod`.
+
+.PHONY: up-prod down-prod logs-prod ps-prod pull-models
+
+## Produção (VPS — docker-compose.prod.yml)
+up-prod:
+	docker compose -f docker-compose.prod.yml up -d
+
+down-prod:
+	docker compose -f docker-compose.prod.yml down
+
+logs-prod:
+	docker compose -f docker-compose.prod.yml logs -f
+
+ps-prod:
+	docker compose -f docker-compose.prod.yml ps
+
+pull-models:
+	docker compose -f docker-compose.prod.yml exec ollama ollama pull hermes3:8b
+	docker compose -f docker-compose.prod.yml exec ollama ollama pull nomic-embed-text

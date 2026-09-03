@@ -1,5 +1,8 @@
 .PHONY: up down dev build logs ingest test lint format check
 
+# Alvos de produção (VPS) ficam em arquivo separado
+-include Makefile.prod
+
 
 ## Produção
 up:
