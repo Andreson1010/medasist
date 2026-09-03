@@ -117,10 +117,31 @@ O LM Studio roda na máquina host — o container acessa via `http://host.docker
 
 ## CI/CD (GitHub Actions)
 
-`.github/workflows/ci.yml` roda automaticamente:
+O pipeline divide **CI** (qualidade + artefato) e **CD** (deploy na VPS) em dois workflows:
+
+```
+push/PR ──▶ ci.yml (CI) ──▶ GHCR (imagens api/ui)
+                │
+merge na main (CI ok)
+                ▼
+         deploy.yml (CD) ──SSH──▶ VPS: pull + compose up -d
+```
+
+### CI — `.github/workflows/ci.yml`
 
 1. **Em toda PR**: lint (`ruff`), formatação (`black --check`) e testes (`pytest` com cobertura ≥ 80%) — o PR fica bloqueado até passar.
-2. **No push para `main`**: além dos testes, builda e publica as imagens `api` e `ui` no **GitHub Container Registry (GHCR)** com tags `latest` + SHA do commit. As imagens ficam prontas para `docker pull` em qualquer servidor.
+2. **No push para `main`**: após os testes, builda e publica as imagens `api` e `ui` no **GitHub Container Registry (GHCR)** com tags `latest` + SHA do commit. O build ocorre no CI — **sem build no servidor**.
+
+### CD — `.github/workflows/deploy.yml`
+
+Disparado automaticamente via `workflow_run` quando o workflow **CI** termina com sucesso na branch `main`:
+
+1. Conecta na VPS por SSH (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`).
+2. Atualiza o repositório (`git pull`), baixa as imagens do GHCR (`docker compose pull`) e sobe a stack (`docker compose -f docker-compose.prod.yml up -d`).
+
+Qualquer merge na `main` que passe no CI chega à produção **sem intervenção manual**. Se um teste falhar, o deploy não roda.
+
+Guia completo de implantação e rollback: `docs/technical/deploy.md`.
 
 ---
 
@@ -304,7 +325,7 @@ medasist/
 ├── scripts/                # ingest_docs.py, evaluate_rag.py
 ├── docker/                 # Dockerfiles da API e UI
 ├── docs/                   # PRD e documentação técnica
-├── .github/workflows/      # CI (lint + testes) e CD (build/push GHCR)
+├── .github/workflows/      # ci.yml (lint, testes, build GHCR) + deploy.yml (CD na VPS)
 ├── data/
 │   ├── raw/                # PDFs de entrada (não versionado)
 │   └── processed/          # Artefatos processados
