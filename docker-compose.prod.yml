@@ -26,7 +26,7 @@ services:
       - medasist_net
 
   api:
-    image: ghcr.io/andreson1010/medasist-api:latest
+    image: ghcr.io/andreson1010/medasist/medasist-api:latest
     pull_policy: always
     restart: unless-stopped
     ports:
@@ -54,7 +54,7 @@ services:
       - medasist_net
 
   ui:
-    image: ghcr.io/andreson1010/medasist-ui:latest
+    image: ghcr.io/andreson1010/medasist/medasist-ui:latest
     pull_policy: always
     restart: unless-stopped
     ports:
