@@ -365,6 +365,8 @@ propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
+prometheus-client==0.26.0
+    # via requirements.txt
 protobuf==6.33.6
     # via
     #   googleapis-common-protos

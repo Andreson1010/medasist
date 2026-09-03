@@ -81,6 +81,9 @@ class Settings(BaseSettings):
         Retry com backoff exponencial (padrão: 2).
     embedding_request_timeout : float
         Timeout em segundos por chamada de embedding do LM Studio (padrão: 30.0).
+    embedding_batch_size : int
+        Textos por requisição de embedding; lotes menores evitam timeout em CPU
+        (padrão: 32).
     chroma_dir : Path
         Diretório de persistência do ChromaDB.
     data_dir : Path
@@ -207,6 +210,8 @@ class Settings(BaseSettings):
     llm_request_timeout: float = Field(default=60.0, gt=0)
     embedding_max_retries: int = Field(default=2, ge=0)
     embedding_request_timeout: float = Field(default=30.0, gt=0)
+    # Número de textos por requisição de embedding (CPU: lotes pequenos evitam timeout)
+    embedding_batch_size: int = Field(default=32, gt=0)
 
     # ChromaDB
     chroma_dir: Path = Field(default=Path("./chroma_db"))

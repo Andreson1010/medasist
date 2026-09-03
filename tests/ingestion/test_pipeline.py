@@ -87,7 +87,19 @@ def test_build_embed_fn_passes_retry_and_timeout_from_settings(settings):
         check_embedding_ctx_length=False,
         max_retries=4,
         request_timeout=25.0,
+        chunk_size=32,
     )
+
+
+def test_build_embed_fn_passes_batch_size_from_settings(settings):
+    """Embeddings em lotes: chunk_size reflete embedding_batch_size do Settings."""
+    settings.embedding_batch_size = 16
+
+    with patch("langchain_openai.OpenAIEmbeddings") as mock_emb_cls:
+        build_embed_fn(settings)
+
+    mock_emb_cls.assert_called_once()
+    assert mock_emb_cls.call_args.kwargs["chunk_size"] == 16
 
 
 # ---------------------------------------------------------------------------

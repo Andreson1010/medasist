@@ -75,6 +75,7 @@ def build_embed_fn(settings: Settings) -> EmbedFn:
         check_embedding_ctx_length=False,
         max_retries=settings.embedding_max_retries,
         request_timeout=settings.embedding_request_timeout,
+        chunk_size=settings.embedding_batch_size,
     )
     return embeddings.embed_documents
 
