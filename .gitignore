@@ -36,4 +36,7 @@ docs/
 .opencode/worktrees/
 .ruff_cache/
 
+# Saída de ferramentas MCP de navegador
+.playwright-mcp/
+
 
