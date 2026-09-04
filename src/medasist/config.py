@@ -203,7 +203,7 @@ class Settings(BaseSettings):
     lm_studio_base_url: str = Field(default="http://localhost:1234/v1")
     lm_studio_api_key: SecretStr = Field(default=SecretStr("lm-studio"))
     lm_studio_llm_model: str = Field(default="phi-3-mini")
-    lm_studio_embedding_model: str = Field(default="nomic-embed-text")
+    lm_studio_embedding_model: str = Field(default="all-minilm")
 
     # Retry/backoff e timeout nas chamadas ao LM Studio
     llm_max_retries: int = Field(default=2, ge=0)
@@ -307,7 +307,7 @@ class Settings(BaseSettings):
 
     # Retrieval
     retrieval_top_k: int = Field(default=10)
-    retrieval_score_threshold: float = Field(default=0.4)
+    retrieval_score_threshold: float = Field(default=1.2)
     retrieval_stopwords: tuple[str, ...] = (
         "qual",
         "quais",

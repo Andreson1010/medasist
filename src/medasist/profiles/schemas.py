@@ -23,8 +23,10 @@ class UserProfile(StrEnum):
 
 
 _CITATION_INSTRUCTION = (
-    "Use os marcadores [N] para citar as fontes do contexto. "
-    "Toda afirmação deve referenciar ao menos um [N]. "
+    "Responda em português. É OBRIGATÓRIO citar as fontes do Contexto: "
+    "toda informação proveniente do contexto deve ser seguida de um marcador "
+    "[N] referente ao item numerado correspondente. A resposta DEVE conter "
+    "pelo menos um marcador [N]; nunca responda sem citações. "
     "Exemplo: 'A dose recomendada é 10 mg/dia [1].'\n\n"
 )
 

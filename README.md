@@ -25,7 +25,7 @@ UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + LM St
 
 | Camada | Tecnologia |
 |--------|-----------|
-| LLM / Embeddings | LM Studio (Phi-3-mini / nomic-embed-text) via LangChain |
+| LLM / Embeddings | LM Studio / Ollama (qwen2.5:3b / all-minilm) via LangChain |
 | Orquestração | LangChain LCEL |
 | Vector Store | ChromaDB (persistente local) |
 | PDF | pdfplumber + PyMuPDF (fallback) |
@@ -41,8 +41,8 @@ UI (Streamlit) → API (FastAPI) → Chain (LangChain LCEL) → ChromaDB + LM St
 
 - Python 3.11+
 - [LM Studio](https://lmstudio.ai/) rodando localmente com:
-  - Modelo LLM carregado (ex: `phi-3-mini`)
-  - Modelo de embeddings carregado (ex: `nomic-embed-text`)
+  - Modelo LLM carregado (ex: `qwen2.5:3b`)
+  - Modelo de embeddings carregado (ex: `all-minilm`)
   - Servidor local iniciado (porta padrão: `1234`)
 
 ---
@@ -77,8 +77,8 @@ Copie `.env.example` para `.env` e ajuste os valores:
 # LM Studio
 LM_STUDIO_BASE_URL=http://localhost:1234/v1
 LM_STUDIO_API_KEY=lm-studio
-LM_STUDIO_LLM_MODEL=phi-3-mini
-LM_STUDIO_EMBEDDING_MODEL=nomic-embed-text
+LM_STUDIO_LLM_MODEL=qwen2.5:3b
+LM_STUDIO_EMBEDDING_MODEL=all-minilm
 
 # API
 API_HOST=0.0.0.0
@@ -87,7 +87,8 @@ ADMIN_API_KEY=troque-por-chave-segura
 
 # Retrieval
 # Chunks com distância L2 acima do threshold ativam o cold start
-RETRIEVAL_SCORE_THRESHOLD=0.4
+# (calibrado p/ all-minilm 384-d: relevantes ~0.5-1.15)
+RETRIEVAL_SCORE_THRESHOLD=1.2
 ```
 
 Toda configuração é gerenciada por `src/medasist/config.py` (pydantic-settings). Nunca hardcode valores — use sempre `settings.*`.

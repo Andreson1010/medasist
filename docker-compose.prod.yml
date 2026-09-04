@@ -6,7 +6,7 @@
 # com contexto reduzido para caber em VPS de 12-16 GB de RAM. Em produção com
 # GPU, remova OLLAMA_GPU_LAYERS/OLLAMA_CONTEXT_LENGTH e devolva o bloco deploy.
 # Pré-requisitos do host: Docker + Compose plugin. Modelos a baixar:
-#   ollama pull hermes3:8b && ollama pull nomic-embed-text
+#   ollama pull qwen2.5:3b && ollama pull all-minilm
 services:
   ollama:
     image: ollama/ollama:latest
@@ -38,7 +38,7 @@ services:
     env_file: .env
     environment:
       - LM_STUDIO_BASE_URL=http://ollama:11434/v1
-      - LM_STUDIO_LLM_MODEL=hermes3
+      - LM_STUDIO_LLM_MODEL=qwen2.5:3b
       - LM_STUDIO_EMBEDDING_MODEL=all-minilm
       - MONITORING_ENABLED=true
     depends_on:

@@ -117,10 +117,10 @@ class TestSettingsEvaluation:
     def test_empty_eval_embedding_model_resolves_to_lm_studio_model(self) -> None:
         settings = Settings(
             admin_api_key=SecretStr("very-strong-key-0123456789"),
-            lm_studio_embedding_model="nomic-embed-text",
+            lm_studio_embedding_model="all-minilm",
             eval_embedding_model="",
         )
-        assert settings.eval_embedding_model == "nomic-embed-text"
+        assert settings.eval_embedding_model == "all-minilm"
 
     def test_non_empty_eval_models_are_respected(self) -> None:
         settings = Settings(

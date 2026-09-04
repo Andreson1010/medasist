@@ -17,5 +17,5 @@ ps-prod:
 	docker compose -f docker-compose.prod.yml ps
 
 pull-models:
-	docker compose -f docker-compose.prod.yml exec ollama ollama pull hermes3:8b
-	docker compose -f docker-compose.prod.yml exec ollama ollama pull nomic-embed-text
+	docker compose -f docker-compose.prod.yml exec ollama ollama pull qwen2.5:3b
+	docker compose -f docker-compose.prod.yml exec ollama ollama pull all-minilm
