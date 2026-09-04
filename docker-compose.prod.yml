@@ -39,7 +39,7 @@ services:
     environment:
       - LM_STUDIO_BASE_URL=http://ollama:11434/v1
       - LM_STUDIO_LLM_MODEL=hermes3
-      - LM_STUDIO_EMBEDDING_MODEL=nomic-embed-text
+      - LM_STUDIO_EMBEDDING_MODEL=all-minilm
       - MONITORING_ENABLED=true
     depends_on:
       ollama:
