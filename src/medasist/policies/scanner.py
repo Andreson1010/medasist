@@ -277,15 +277,17 @@ def generate_baseline(
             text = _read_file(file)
         except (OSError, UnicodeDecodeError):
             continue
-        for rule_id, checker in RULE_REGISTRY:
+        for _rule_id, checker in RULE_REGISTRY:
             for violation in checker(text, rel, base, allowlist=None):
-                location = violation.symbol if violation.symbol else str(violation.line)
-                entries.append(
-                    BaselineEntry(
-                        rule_id=rule_id,
-                        path=violation.path,
-                        location=location,
-                        reason=_default_reason(rule_id),
-                    )
+                location = (
+                    violation.symbol if violation.symbol else str(violation.line)
                 )
+                entry = BaselineEntry(
+                    rule_id=violation.rule_id,
+                    path=violation.path,
+                    location=location,
+                    reason=_default_reason(violation.rule_id),
+                )
+                if entry not in entries:
+                    entries.append(entry)
     return tuple(entries)
