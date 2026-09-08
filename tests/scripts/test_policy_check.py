@@ -83,6 +83,18 @@ class TestMainExitCodes:
         assert "NO-PRINT" in content
         assert "src/bad.py" in content
 
+    def test_baseline_generate_preserves_allowlist(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        _write(src, "bad.py", _BAD_PY)
+        out = tmp_path / "gerada.toml"
+        out.write_text(
+            '[allowlist.patient_data]\ntokens = ["meufix"]\n',
+            encoding="utf-8",
+        )
+        assert main([str(src), "--baseline-generate", str(out)]) == 0
+        content = out.read_text(encoding="utf-8")
+        assert '"meufix"' in content
+
     def test_obsolete_baseline_exits_one(self, tmp_path: Path, capsys) -> None:
         src = tmp_path / "src"
         _write(src, "ok.py", _CLEAN_PY)
