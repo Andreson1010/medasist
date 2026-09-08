@@ -235,8 +235,7 @@ def save_baseline(path: Path, entries: Sequence[BaselineEntry]) -> None:
     if tokens:
         lines.append("[allowlist.patient_data]")
         lines.append(
-            "# Tokens sintéticos de fixtures — preservados pelo "
-            "--baseline-generate"
+            "# Tokens sintéticos de fixtures — preservados pelo " "--baseline-generate"
         )
         lines.append("tokens = [")
         for token in tokens:
