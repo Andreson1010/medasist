@@ -9,6 +9,7 @@ apenas pelo gerador ``--baseline-generate``.
 
 from __future__ import annotations
 
+import logging
 import os
 import tomllib
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from typing import TYPE_CHECKING, Sequence
 
 if TYPE_CHECKING:
     from medasist.policies.report import PolicyViolation
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

@@ -7,11 +7,14 @@ dataclasses congeladas seguindo o padrão do repositório.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from medasist.policies.baseline import BaselineEntry
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
