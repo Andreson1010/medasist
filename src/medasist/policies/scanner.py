@@ -42,16 +42,20 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
 )
 
 
-def _is_excluded(file: Path, excludes: Iterable[str]) -> bool:
-    """Indica se um arquivo contém segmento excluído no caminho.
+def _is_excluded(rel: Path, excludes: Iterable[str]) -> bool:
+    """Indica se um arquivo contém segmento excluído no caminho relativo.
 
-    Qualquer segmento da lista de exclusões, ``__pycache__`` ou diretório
-    oculto (prefixo ``.``) faz o arquivo ser pulado.
+    A exclusão avalia os segmentos **dentro da subárvore varrida** (caminho
+    relativo à base da varredura): qualquer segmento da lista de exclusões,
+    ``__pycache__`` ou diretório oculto (prefixo ``.``) faz o arquivo ser
+    pulado. Ancestrais das raízes (ex.: checkout em ``~/.projetos/medasist``)
+    **não** são avaliados — um diretório oculto acima das raízes não exclui
+    os arquivos.
 
     Parameters
     ----------
-    file : Path
-        Caminho do arquivo candidato.
+    rel : Path
+        Caminho do arquivo relativo à base da varredura.
     excludes : Iterable[str]
         Nomes de segmentos excluídos.
 
@@ -63,7 +67,7 @@ def _is_excluded(file: Path, excludes: Iterable[str]) -> bool:
     excluded = set(excludes)
     return any(
         part in excluded or part == "__pycache__" or part.startswith(".")
-        for part in file.parts
+        for part in rel.parts
     )
 
 
@@ -73,8 +77,10 @@ def collect_files(
 ) -> list[Path]:
     """Coleta os arquivos ``.py`` sob as raízes, aplicando as exclusões.
 
-    Raízes inexistentes são ignoradas (sem erro). Nunca cruza para fora do
-    diretório de cada raiz (``rglob``).
+    Raízes inexistentes são ignoradas (sem erro) e podem resultar em lista
+    vazia. Nunca cruza para fora do diretório de cada raiz (``rglob``). As
+    exclusões valem para segmentos dentro da subárvore varrida — ancestrais
+    ocultos das raízes não excluem arquivos.
 
     Parameters
     ----------
@@ -89,13 +95,15 @@ def collect_files(
         Arquivos ``.py`` coletados.
     """
     excluded = DEFAULT_EXCLUDES if excludes is None else tuple(excludes)
+    base = _scan_base(roots)
     files: list[Path] = []
     for root in roots:
-        root_path = Path(root)
+        root_path = Path(root).resolve()
         if not root_path.is_dir():
             continue
         for file in root_path.rglob("*.py"):
-            if not _is_excluded(file, excluded):
+            rel = file.relative_to(base)
+            if not _is_excluded(rel, excluded):
                 files.append(file)
     return files
 

@@ -79,6 +79,16 @@ class TestCollectFiles:
     def test_missing_root_is_ignored(self, tmp_path: Path) -> None:
         assert collect_files([tmp_path / "nao-existe"]) == []
 
+    def test_hidden_parent_dir_is_not_excluded(self, tmp_path: Path) -> None:
+        # Checkout sob diretório oculto (ex.: ~/.projetos/medasist): ancestrais
+        # ocultos NÃO são excluídos — só segmentos dentro da subárvore varrida.
+        checkout = tmp_path / ".projetos" / "medasist"
+        _write(checkout, "src/ok.py", "x = 1\n")
+        _write(checkout, "src/.hidden/h.py", "x = 2\n")
+        files = collect_files([checkout / "src"])
+        rels = sorted(f.relative_to(checkout).as_posix() for f in files)
+        assert rels == ["src/ok.py"]
+
 
 class TestRunScan:
     def test_clean_tree_returns_no_failures(self, tmp_path: Path) -> None:
@@ -168,6 +178,29 @@ class TestRunScan:
         _write(src, "x.py", 'print("y")\n')
         report = run_scan([src], baseline_path=tmp_path / "nao-existe.toml")
         assert report.new_violations[0].path == "src/x.py"
+
+    def test_zero_files_fails_the_gate(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        src.mkdir(parents=True, exist_ok=True)  # raiz existe, sem .py
+        report = run_scan([src], baseline_path=tmp_path / "nao-existe.toml")
+        assert report.files_scanned == 0
+        assert report.has_failures is True
+
+    def test_missing_root_fails_the_gate(self, tmp_path: Path) -> None:
+        report = run_scan(
+            [tmp_path / "nao-existe"], baseline_path=tmp_path / "nao-existe.toml"
+        )
+        assert report.files_scanned == 0
+        assert report.has_failures is True
+
+    def test_scan_under_hidden_parent_still_works(self, tmp_path: Path) -> None:
+        checkout = tmp_path / ".projetos" / "medasist"
+        _write(checkout, "src/ok.py", _CLEAN_PY)
+        report = run_scan(
+            [checkout / "src"], baseline_path=tmp_path / "nao-existe.toml"
+        )
+        assert report.files_scanned == 1
+        assert report.has_failures is False
 
 
 class TestGenerateBaseline:
