@@ -34,12 +34,12 @@ class TestFuncLength:
         text = (
             "def outer() -> None:\n"
             "    def inner() -> None:\n"
-            "        return 1\n"
-            + "\n".join(body)
-            + "\n"
+            "        return 1\n" + "\n".join(body) + "\n"
         )
         violations = check_complexity(text, "src/foo.py", _ROOT)
-        assert any(v.rule_id == "FUNC-LENGTH" and v.symbol == "outer" for v in violations)
+        assert any(
+            v.rule_id == "FUNC-LENGTH" and v.symbol == "outer" for v in violations
+        )
 
 
 class TestNestingDepth:
@@ -69,7 +69,9 @@ class TestNestingDepth:
             "                    return 2\n"
         )
         violations = check_complexity(text, "src/foo.py", _ROOT)
-        assert any(v.rule_id == "NESTING-DEPTH" and v.symbol == "run" for v in violations)
+        assert any(
+            v.rule_id == "NESTING-DEPTH" and v.symbol == "run" for v in violations
+        )
 
     def test_else_and_elif_add_compound_level(self) -> None:
         # elif é um If aninhado no orelse do if: cada bloco composto soma nível.
@@ -84,7 +86,9 @@ class TestNestingDepth:
             "                    pass\n"
         )
         violations = check_complexity(text, "src/foo.py", _ROOT)
-        assert any(v.rule_id == "NESTING-DEPTH" and v.symbol == "run" for v in violations)
+        assert any(
+            v.rule_id == "NESTING-DEPTH" and v.symbol == "run" for v in violations
+        )
 
     def test_four_levels_with_else_is_legal(self) -> None:
         text = (

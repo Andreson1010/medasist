@@ -35,7 +35,7 @@ class TestPathlib:
         assert check_pathlib(text, "src/foo.py", _ROOT) == []
 
     def test_string_inside_str_call_is_legal(self) -> None:
-        text = 'value = str(path)\n'
+        text = "value = str(path)\n"
         assert check_pathlib(text, "src/foo.py", _ROOT) == []
 
     def test_module_docstring_with_path_is_ignored(self) -> None:
@@ -55,16 +55,16 @@ class TestPathlib:
         assert check_pathlib(text, "src/foo.py", _ROOT) == []
 
     def test_open_with_pathlib_arg_is_legal(self) -> None:
-        text = "with open(path_obj, \"rb\") as f:\n    pass\n"
+        text = 'with open(path_obj, "rb") as f:\n    pass\n'
         assert check_pathlib(text, "src/foo.py", _ROOT) == []
 
     def test_non_string_first_arg_of_open_is_legal(self) -> None:
-        text = "with open(Path(\"data/x.pdf\")) as f:\n    pass\n"
+        text = 'with open(Path("data/x.pdf")) as f:\n    pass\n'
         assert check_pathlib(text, "src/foo.py", _ROOT) == []
 
     def test_function_docstring_with_path_is_ignored(self) -> None:
         text = (
-            'def foo() -> None:\n'
+            "def foo() -> None:\n"
             '    """Lê arquivo em data/raw."""\n'
             "    return None\n"
         )

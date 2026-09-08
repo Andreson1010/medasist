@@ -58,9 +58,7 @@ class TestPatientDataPositives:
         assert len(violations) == 1
 
     def test_rg_with_dots_is_violation(self) -> None:
-        violations = check_patient_data(
-            f'rg = "{_rg()}"\n', "tests/fixture.py", _ROOT
-        )
+        violations = check_patient_data(f'rg = "{_rg()}"\n', "tests/fixture.py", _ROOT)
         assert len(violations) == 1
         assert "RG" in violations[0].message
 
@@ -116,25 +114,30 @@ class TestPatientDataNegatives:
         assert check_patient_data(text, "tests/fixture.py", _ROOT) == []
 
     def test_dob_outside_age_range_is_legal(self) -> None:
-        assert check_patient_data(
-            'data = "01/01/1900"\n', "tests/fixture.py", _ROOT
-        ) == []
+        assert (
+            check_patient_data('data = "01/01/1900"\n', "tests/fixture.py", _ROOT) == []
+        )
 
     def test_phone_starting_with_zero_is_legal(self) -> None:
         # DDD 01 inválido no Brasil: não casa como telefone
-        assert check_patient_data(
-            'codigo = "0123456789"\n', "tests/fixture.py", _ROOT
-        ) == []
+        assert (
+            check_patient_data('codigo = "0123456789"\n', "tests/fixture.py", _ROOT)
+            == []
+        )
 
     def test_embedded_numbers_are_not_matched(self) -> None:
-        assert check_patient_data(
-            'hash = "abc12345678900def"\n', "tests/fixture.py", _ROOT
-        ) == []
+        assert (
+            check_patient_data(
+                'hash = "abc12345678900def"\n', "tests/fixture.py", _ROOT
+            )
+            == []
+        )
 
     def test_plain_text_is_legal(self) -> None:
-        assert check_patient_data(
-            'nome = "Maria da Silva"\n', "tests/fixture.py", _ROOT
-        ) == []
+        assert (
+            check_patient_data('nome = "Maria da Silva"\n', "tests/fixture.py", _ROOT)
+            == []
+        )
 
     def test_line_with_allowlist_token_suppresses_match(self) -> None:
         text = f"Zolatril: {_cpf()}\n"
@@ -157,6 +160,6 @@ class TestPatientDataNegatives:
         assert violations[0].line == 1
 
     def test_reports_line_number(self) -> None:
-        text = f"a = 1\nb = 2\ncpf = \"{_cpf()}\"\n"
+        text = f'a = 1\nb = 2\ncpf = "{_cpf()}"\n'
         violations = check_patient_data(text, "tests/fixture.py", _ROOT)
         assert violations[0].line == 3
