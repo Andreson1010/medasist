@@ -175,6 +175,24 @@ class TestPatientDataNegatives:
         text = f"Zolatril: {_cpf()}\n"
         assert check_patient_data(text, "tests/fixture.py", _ROOT) == []
 
+    def test_generic_drug_name_with_cpf_not_suppressed(self) -> None:
+        # Nome genérico real NÃO está no default do código: linha não é suprimida.
+        text = f"Paciente em uso de amoxicilina, CPF {_cpf()}\n"
+        violations = check_patient_data(text, "tests/fixture.py", _ROOT)
+        assert len(violations) == 1
+
+    def test_substring_near_match_not_suppressed(self) -> None:
+        text = f"amoxicilinaX: {_cpf()}\n"
+        violations = check_patient_data(text, "tests/fixture.py", _ROOT)
+        assert len(violations) == 1
+
+    def test_whole_word_boundary_respected(self) -> None:
+        text = f"BetazolX: {_cpf()}\n"
+        violations = check_patient_data(text, "tests/fixture.py", _ROOT)
+        assert len(violations) == 1
+        suppressed = f"Betazol: {_cpf()}\n"
+        assert check_patient_data(suppressed, "tests/fixture.py", _ROOT) == []
+
     def test_extra_allowlist_parameter(self) -> None:
         text = f"fixture sintetica: {_cpf()}\n"
         violations = check_patient_data(

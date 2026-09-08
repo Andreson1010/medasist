@@ -42,16 +42,14 @@ _PATH_NAME_RE = re.compile(r"(path|file|dir|output)")
 
 _DEFAULT_PATIENT_ALLOWLIST = frozenset(
     {
+        # Apenas tokens puramente sintéticos de fixtures. Nomes genéricos reais
+        # (amoxicilina, ibuprofeno, omeprazol, dipirona, paracetamol, insulina)
+        # NÃO ficam no default do código — se forem fixtures do projeto, vão em
+        # [allowlist.patient_data] do policies.toml (decisão explícita).
         "zolatril",
         "alphazol",
         "betazol",
         "gammacol",
-        "amoxicilina",
-        "ibuprofeno",
-        "omeprazol",
-        "dipirona",
-        "paracetamol",
-        "insulina",
         "wrong-key",
     }
 )
@@ -631,6 +629,25 @@ def _patient_match(line: str, current_year: int) -> tuple[str, str] | None:
     return None
 
 
+def _allowlist_regex(tokens: frozenset[str]) -> re.Pattern[str]:
+    """Monta o regex de allowlist por **token inteiro** (``\\b<token>\\b``).
+
+    Case-insensitive. Substrings (ex.: ``amoxicilinaX``) não suprimem a linha.
+
+    Parameters
+    ----------
+    tokens : frozenset[str]
+        Tokens sintéticos (minúsculos) a considerar.
+
+    Returns
+    -------
+    re.Pattern[str]
+        Regex que casa quando a linha contém um token completo.
+    """
+    pattern = "|".join(re.escape(token) for token in sorted(tokens))
+    return re.compile(rf"\b(?:{pattern})\b", re.IGNORECASE)
+
+
 def check_patient_data(
     text: str,
     path: str,
@@ -662,10 +679,11 @@ def check_patient_data(
         Violações da regra ``PATIENT-DATA``, se houver.
     """
     allow = _DEFAULT_PATIENT_ALLOWLIST | (allowlist or frozenset())
+    allow_re = _allowlist_regex(allow)
     current_year = date.today().year
     violations: list[PolicyViolation] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        if any(token in line.lower() for token in allow):
+        if allow_re.search(line):
             continue
         found = _patient_match(line, current_year)
         if found is not None:
