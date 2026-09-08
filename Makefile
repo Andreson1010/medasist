@@ -1,4 +1,4 @@
-.PHONY: up down dev build logs ingest test lint format check
+.PHONY: up down dev build logs ingest test lint format policy check
 
 # Alvos de produção (VPS) ficam em arquivo separado
 -include Makefile.prod
@@ -48,6 +48,9 @@ lint:
 format:
 	black src/ tests/ scripts/
 	ruff check --fix src/ tests/ scripts/
+
+policy:
+	python scripts/policy_check.py src tests scripts
 
 ## Verificação end-to-end
 check:
