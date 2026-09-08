@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from medasist.policies.baseline import (
     BaselineEntry,
     find_obsolete,
+    load_allowlist,
     load_baseline,
     match,
     normalize_path,
@@ -14,7 +16,7 @@ from medasist.policies.baseline import (
 )
 from medasist.policies.report import PolicyViolation
 
-_SAMPLE_TOML = '''\
+_SAMPLE_TOML = """\
 # Baseline do policy checker
 
 [[entries]]
@@ -29,7 +31,7 @@ path = "scripts/evaluate_rag.py"
 location = "_print_report"
 reason = "carve-out stdout de CLI (OQ-03)"
 active = false
-'''
+"""
 
 
 def _entry(**overrides) -> BaselineEntry:
@@ -89,8 +91,29 @@ class TestLoadBaseline:
     def test_malformed_toml_raises(self, tmp_path: Path) -> None:
         path = tmp_path / "quebrado.toml"
         path.write_text("[[entries]\nrule_id = ", encoding="utf-8")
-        with pytest.raises(Exception):
+        with pytest.raises(tomllib.TOMLDecodeError):
             load_baseline(path)
+
+
+class TestLoadAllowlist:
+    def test_loads_tokens_lowercased(self, tmp_path: Path) -> None:
+        path = tmp_path / "policies.toml"
+        path.write_text(
+            '[allowlist.patient_data]\n'
+            'tokens = ["Zolatril", "Alphazol", "amoxicilina"]\n',
+            encoding="utf-8",
+        )
+        assert load_allowlist(path) == frozenset(
+            {"zolatril", "alphazol", "amoxicilina"}
+        )
+
+    def test_missing_file_returns_empty(self, tmp_path: Path) -> None:
+        assert load_allowlist(tmp_path / "nao-existe.toml") == frozenset()
+
+    def test_missing_section_returns_empty(self, tmp_path: Path) -> None:
+        path = tmp_path / "policies.toml"
+        path.write_text("[[entries]]\nrule_id = \"X\"\n", encoding="utf-8")
+        assert load_allowlist(path) == frozenset()
 
 
 class TestSaveBaseline:
@@ -148,9 +171,15 @@ class TestMatch:
     def test_matches_by_rule_path_location(self) -> None:
         baseline = (
             _entry(),
-            _entry(rule_id="NO-PRINT", path="scripts/evaluate_rag.py", location="_print_report"),
+            _entry(
+                rule_id="NO-PRINT",
+                path="scripts/evaluate_rag.py",
+                location="_print_report",
+            ),
         )
-        found = match(baseline, "FUNC-LENGTH", "src/medasist/generation/chain.py", "_run_single")
+        found = match(
+            baseline, "FUNC-LENGTH", "src/medasist/generation/chain.py", "_run_single"
+        )
         assert found == baseline[0]
 
     def test_no_match_returns_none(self) -> None:
@@ -159,27 +188,46 @@ class TestMatch:
 
     def test_inactive_entry_never_suppresses(self) -> None:
         baseline = (_entry(active=False),)
-        assert match(baseline, "FUNC-LENGTH", "src/medasist/generation/chain.py", "_run_single") is None
+        assert (
+            match(
+                baseline,
+                "FUNC-LENGTH",
+                "src/medasist/generation/chain.py",
+                "_run_single",
+            )
+            is None
+        )
 
     def test_path_normalization_on_match(self) -> None:
         baseline = (_entry(),)
-        assert match(baseline, "FUNC-LENGTH", "src/medasist/generation/chain.py", "_run_single")
+        assert match(
+            baseline, "FUNC-LENGTH", "src/medasist/generation/chain.py", "_run_single"
+        )
 
 
 class TestFindObsolete:
     def test_no_obsolete_when_all_matched(self) -> None:
         baseline = (_entry(),)
         violations = (_violation(),)
-        assert find_obsolete(violations, baseline, ["src/medasist/generation/chain.py"]) == ()
+        assert (
+            find_obsolete(violations, baseline, ["src/medasist/generation/chain.py"])
+            == ()
+        )
 
     def test_fixed_violation_is_obsolete(self) -> None:
         baseline = (_entry(),)
-        assert find_obsolete((), baseline, ["src/medasist/generation/chain.py"]) == baseline
+        assert (
+            find_obsolete((), baseline, ["src/medasist/generation/chain.py"])
+            == baseline
+        )
 
     def test_renamed_symbol_is_obsolete(self) -> None:
         baseline = (_entry(location="_run_single"),)
         violations = (_violation(symbol="_run_single_renamed"),)
-        assert find_obsolete(violations, baseline, ["src/medasist/generation/chain.py"]) == baseline
+        assert (
+            find_obsolete(violations, baseline, ["src/medasist/generation/chain.py"])
+            == baseline
+        )
 
     def test_deleted_file_is_obsolete(self) -> None:
         baseline = (_entry(),)

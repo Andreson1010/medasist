@@ -151,6 +151,8 @@ def load_allowlist(path: Path) -> frozenset[str]:
     with path.open("rb") as handle:
         data = tomllib.load(handle)
     raw = data.get("allowlist", {}).get("patient_data", [])
+    if isinstance(raw, dict):
+        raw = raw.get("tokens", [])
     return frozenset(str(token).lower() for token in raw)
 
 

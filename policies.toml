@@ -1,0 +1,193 @@
+# Baseline do policy checker (gerado por: python scripts/policy_check.py --baseline-generate)
+# Remove entradas conforme o débito é pago (AC-15 exige limpeza de obsoletas).
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/logging_setup.py"
+location = "configure_logging"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "LOGGER"
+path = "src/medasist/api/deps.py"
+location = "1"
+reason = "débito pré-existente"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/api/main.py"
+location = "create_app"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "LOGGER"
+path = "src/medasist/api/schemas.py"
+location = "1"
+reason = "débito pré-existente"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/evaluation/metrics.py"
+location = "_collect_rows"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/evaluation/metrics.py"
+location = "_build_per_question"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/generation/chain.py"
+location = "_run_single"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/generation/chain.py"
+location = "_merge_sub_results"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/generation/chain.py"
+location = "run_query"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/generation/chain.py"
+location = "_stream_single"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/generation/chain.py"
+location = "stream_answer"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ingestion/chunker.py"
+location = "chunk_document"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ingestion/pipeline.py"
+location = "ingest_document"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ingestion/pipeline.py"
+location = "ingest_directory"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "LOGGER"
+path = "src/medasist/ingestion/schemas.py"
+location = "1"
+reason = "débito pré-existente"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/profiles/schemas.py"
+location = "get_profile_config"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/retrieval/retriever.py"
+location = "retrieve"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/retrieval/retriever.py"
+location = "_rrf_fuse"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/retrieval/retriever.py"
+location = "_retrieve_hybrid"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/retrieval/retriever.py"
+location = "_log_retrieve_metric"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "NESTING-DEPTH"
+path = "src/medasist/ui/app.py"
+location = "_delta_generator"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ui/app.py"
+location = "_render_streaming"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ui/app.py"
+location = "main"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "NESTING-DEPTH"
+path = "src/medasist/ui/app.py"
+location = "main"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ui/client.py"
+location = "query"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/ui/client.py"
+location = "query_stream"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/api/routers/ingest.py"
+location = "ingest"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "FUNC-LENGTH"
+path = "src/medasist/api/routers/query.py"
+location = "_stream_events"
+reason = "débito AD-005 (limite de código pré-existente)"
+
+[[entries]]
+rule_id = "NO-PRINT"
+path = "scripts/evaluate_rag.py"
+location = "_print_report"
+reason = "carve-out stdout de CLI (OQ-03)"
+
+[allowlist.patient_data]
+# Tokens sintéticos de fixtures (fármacos/protocolos fictícios) — suprimem
+# PATIENT-DATA quando a linha contém um destes tokens (case-insensitive).
+# Adicione novos tokens sintéticos conforme novos fixtures entrarem no repo.
+tokens = [
+    "Zolatril",
+    "Alphazol",
+    "Betazol",
+    "Gammacol",
+    "amoxicilina",
+    "ibuprofeno",
+    "omeprazol",
+    "dipirona",
+    "paracetamol",
+    "insulina",
+]
