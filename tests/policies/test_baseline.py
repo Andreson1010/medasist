@@ -138,6 +138,25 @@ class TestSaveBaseline:
         loaded = load_baseline(path)
         assert loaded == entries
 
+    def test_preserves_existing_allowlist(self, tmp_path: Path) -> None:
+        path = tmp_path / "policies.toml"
+        path.write_text(
+            '[allowlist.patient_data]\n'
+            'tokens = ["Zolatril", "meufix"]\n',
+            encoding="utf-8",
+        )
+        save_baseline(path, (_entry(),))
+        assert load_allowlist(path) == frozenset({"zolatril", "meufix"})
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        assert data["allowlist"]["patient_data"]["tokens"] == ["Zolatril", "meufix"]
+
+    def test_no_allowlist_when_none_exists(self, tmp_path: Path) -> None:
+        path = tmp_path / "policies.toml"
+        save_baseline(path, (_entry(),))
+        text = path.read_text(encoding="utf-8")
+        assert "allowlist" not in text
+        assert load_allowlist(path) == frozenset()
+
     def test_escapes_backslash_and_quote(self, tmp_path: Path) -> None:
         entries = (
             _entry(

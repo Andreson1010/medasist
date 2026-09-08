@@ -130,6 +130,33 @@ def load_baseline(path: Path) -> tuple[BaselineEntry, ...]:
     return tuple(entries)
 
 
+def _load_allowlist_tokens(path: Path) -> tuple[str, ...]:
+    """Carrega os tokens de ``[allowlist.patient_data]`` como escritos no TOML.
+
+    Arquivo ausente ou seção ausente retorna tupla vazia. Usado por
+    ``load_allowlist`` (que normaliza para minúsculas) e por ``save_baseline``
+    (que preserva o texto original ao regravar a baseline).
+
+    Parameters
+    ----------
+    path : Path
+        Caminho do arquivo ``policies.toml``.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Tokens da seção, na ordem em que aparecem no arquivo.
+    """
+    if not path.exists():
+        return ()
+    with path.open("rb") as handle:
+        data = tomllib.load(handle)
+    raw = data.get("allowlist", {}).get("patient_data", [])
+    if isinstance(raw, dict):
+        raw = raw.get("tokens", [])
+    return tuple(str(token) for token in raw)
+
+
 def load_allowlist(path: Path) -> frozenset[str]:
     """Carrega os tokens sintéticos de ``[allowlist.patient_data]``.
 
@@ -146,14 +173,7 @@ def load_allowlist(path: Path) -> frozenset[str]:
     frozenset[str]
         Tokens configurados, minúsculos, para suppressão de PATIENT-DATA.
     """
-    if not path.exists():
-        return frozenset()
-    with path.open("rb") as handle:
-        data = tomllib.load(handle)
-    raw = data.get("allowlist", {}).get("patient_data", [])
-    if isinstance(raw, dict):
-        raw = raw.get("tokens", [])
-    return frozenset(str(token).lower() for token in raw)
+    return frozenset(token.lower() for token in _load_allowlist_tokens(path))
 
 
 def _escape(value: str) -> str:
@@ -183,7 +203,10 @@ def save_baseline(path: Path, entries: Sequence[BaselineEntry]) -> None:
 
     Serializador mínimo controlado pelo gerador: escreve apenas os campos das
     entradas (``active=false`` apenas quando desativada) e pode ser relido por
-    ``load_baseline`` em round-trip idêntico.
+    ``load_baseline`` em round-trip idêntico. A seção
+    ``[allowlist.patient_data]`` do arquivo existente é **preservada**
+    (dev não perde tokens customizados ao rodar ``--baseline-generate``);
+    quando não há tokens, nenhuma seção é emitida.
 
     Parameters
     ----------
@@ -207,6 +230,18 @@ def save_baseline(path: Path, entries: Sequence[BaselineEntry]) -> None:
         lines.append(f'reason = "{_escape(entry.reason)}"')
         if not entry.active:
             lines.append("active = false")
+        lines.append("")
+    tokens = _load_allowlist_tokens(path)
+    if tokens:
+        lines.append("[allowlist.patient_data]")
+        lines.append(
+            "# Tokens sintéticos de fixtures — preservados pelo "
+            "--baseline-generate"
+        )
+        lines.append("tokens = [")
+        for token in tokens:
+            lines.append(f'    "{_escape(token)}",')
+        lines.append("]")
         lines.append("")
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
