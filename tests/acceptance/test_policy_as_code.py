@@ -267,7 +267,7 @@ class TestAc13PatientData:
         _write(
             tmp_path,
             "src/bad.py",
-            f"{_FUTURE}{_LOGGER}\ncpf = \"{cpf}\"\n",
+            f'{_FUTURE}{_LOGGER}\ncpf = "{cpf}"\n',
         )
         assert _cli(tmp_path, "--baseline", str(tmp_path / "nao.toml")) == 1
 
