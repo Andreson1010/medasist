@@ -9,11 +9,7 @@ _ROOT = Path(".")
 
 class TestDocstring:
     def test_public_function_with_docstring_is_legal(self) -> None:
-        text = (
-            "def run() -> None:\n"
-            '    """Executa algo."""\n'
-            "    return None\n"
-        )
+        text = "def run() -> None:\n" '    """Executa algo."""\n' "    return None\n"
         assert check_docstring(text, "src/foo.py", _ROOT) == []
 
     def test_public_function_without_docstring_is_violation(self) -> None:

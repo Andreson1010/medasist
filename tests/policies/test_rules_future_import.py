@@ -9,7 +9,7 @@ _ROOT = Path(".")
 
 class TestFutureImport:
     def test_first_statement_is_future_import(self) -> None:
-        text = 'from __future__ import annotations\n\nimport os\n'
+        text = "from __future__ import annotations\n\nimport os\n"
         assert check_future_import(text, "src/foo.py", _ROOT) == []
 
     def test_docstring_before_future_import_is_legal(self) -> None:
@@ -50,7 +50,12 @@ class TestFutureImport:
         assert check_future_import("", "src/medasist/pkg/__init__.py", _ROOT) == []
 
     def test_comment_only_init_py_is_exempt(self) -> None:
-        assert check_future_import("# apenas comentário\n", "src/medasist/pkg/__init__.py", _ROOT) == []
+        assert (
+            check_future_import(
+                "# apenas comentário\n", "src/medasist/pkg/__init__.py", _ROOT
+            )
+            == []
+        )
 
     def test_future_import_with_other_names_is_legal(self) -> None:
         text = "from __future__ import annotations, division\n"

@@ -51,9 +51,6 @@ class TestLogger:
         assert check_logger(text, "src/medasist/foo.py", _ROOT) == []
 
     def test_logger_assigned_other_value_is_violation(self) -> None:
-        text = (
-            "from __future__ import annotations\n\n"
-            "logger = something_else()\n"
-        )
+        text = "from __future__ import annotations\n\n" "logger = something_else()\n"
         violations = check_logger(text, "src/medasist/foo.py", _ROOT)
         assert len(violations) == 1
