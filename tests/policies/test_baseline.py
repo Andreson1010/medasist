@@ -141,8 +141,7 @@ class TestSaveBaseline:
     def test_preserves_existing_allowlist(self, tmp_path: Path) -> None:
         path = tmp_path / "policies.toml"
         path.write_text(
-            '[allowlist.patient_data]\n'
-            'tokens = ["Zolatril", "meufix"]\n',
+            "[allowlist.patient_data]\n" 'tokens = ["Zolatril", "meufix"]\n',
             encoding="utf-8",
         )
         save_baseline(path, (_entry(),))
