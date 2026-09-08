@@ -33,6 +33,35 @@ As convenções obrigatórias do AGENTS.md (future import, pathlib, logger, docs
 
 ---
 
+## Emendas aprovadas (Checkpoint 2.5)
+
+Emendas de escopo aprovadas pelo humano após revisão do validator (IMP-01,
+IMP-02, IMP-03). **Válidas e vinculantes** — o checker implementa exatamente
+este comportamento:
+
+- **(a) DOCSTRING (AC-11) e COMPLEXITY 50/4/800 (AC-12/AC-19) escopadas a `src/`**
+  — as convenções de docstring e limites físicos são convenções de código-fonte.
+  Arquivos de `tests/` e `scripts/` (funções de teste sem docstring, arquivos de
+  teste >800 linhas) ficam fora da regra; baseliná-los seria impraticável e
+  contradiz o plano de baseline do débito pré-existente.
+- **(b) LOGGER (AC-10) isenta todo `__init__.py`** — `__init__.py` são marcadores
+  de pacote/pontos de re-export (ex.: `src/medasist/evaluation/__init__.py`),
+  não módulos de código; a isenção vale mesmo para `__init__.py` não-vazios.
+- **(c) PATHLIB (AC-08) restrita a sinais inequívocos** — flagga apenas: primeiro
+  argumento do builtin `open(...)`, prefixo de drive Windows (`C:\...`) ou
+  atribuição a variável de nome path-named não-privada (path/file/dir/output)
+  com separador ou extensão conhecida. Strings que apenas "terminam com
+  extensão" ou "contêm `/`" em outros contextos (fixtures `source="bula.pdf"`,
+  `"5/minute"`, `"BAAI/bge-reranker-base"`, `"text/event-stream"`) não são
+  flaggadas.
+
+**Nota de cobertura dos ACs:** AC-08, AC-10, AC-11, AC-12 (e AC-13, cujo
+allowlist de tokens sintéticos e escape-hatch por baseline são o mecanismo
+documentado para fixtures) são implementados e testados conforme estas emendas;
+a "árvore passa no 1º commit" (AC-01/02) depende delas.
+
+---
+
 ## User Stories
 
 ### P1: Policy checker CLI com contrato de exit ⭐ MVP

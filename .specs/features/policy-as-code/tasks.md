@@ -342,7 +342,7 @@ T18
 
 ### T12: População da baseline (`policies.toml`) e 1º commit verde
 
-**What**: Rodar `python scripts/policy_check.py --baseline-generate`, revisar o `policies.toml` gerado (deve conter **7 entradas FUNC-LENGTH** — `chain.py: _run_single/_merge_sub_results/_stream_single/stream_answer`, `retriever.py: retrieve/_retrieve_hybrid`, `pipeline.py: ingest_document` com reason `débito AD-005` — **+ 1 entrada NO-PRINT** — `scripts/evaluate_rag.py: _print_report` com reason carve-out OQ-03), commitá-lo, e verificar exit 0 na árvore.
+**What**: Rodar `python scripts/policy_check.py --baseline-generate`, revisar o `policies.toml` gerado (deve conter **29 entradas reais da árvore**: 23 FUNC-LENGTH — as 7 AD-005 originais (`chain.py: _run_single/_merge_sub_results/_stream_single/stream_answer`, `retriever.py: retrieve/_retrieve_hybrid`, `pipeline.py: ingest_document`) + 16 funções >50 linhas adicionais + 2 NESTING-DEPTH + 3 LOGGER + 1 NO-PRINT (`scripts/evaluate_rag.py: _print_report` com reason carve-out OQ-03)), commitá-lo, e verificar exit 0 na árvore. O desvio do plano original ("8 entradas") é **emenda aprovada** (IMP-01/02/03 — ver `spec.md` "Emendas aprovadas").
 **Where**: `policies.toml`
 **Depends on**: T11
 **Reuses**: Verificação contra a árvore real do worktree (design.md "Storage")
@@ -353,7 +353,7 @@ T18
 - Skill: build-with-tests
 
 **Done when**:
-- [ ] `policies.toml` contém exatamente as 8 entradas esperadas (sem entradas para future-import pós-docstring, `__init__.py` vazios ou helpers privados)
+- [ ] `policies.toml` contém as **29 entradas reais** (23 FUNC-LENGTH, 2 NESTING-DEPTH, 3 LOGGER, 1 NO-PRINT — sem entradas para future-import pós-docstring, `__init__.py` vazios ou helpers privados)
 - [ ] `python scripts/policy_check.py src tests scripts` → exit 0 (AC-01/02)
 - [ ] Full gate verde com o baseline commitado
 - [ ] Test count: suíte completa passa (sem regressão nos 762+ testes existentes)
