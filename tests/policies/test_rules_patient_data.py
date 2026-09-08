@@ -156,16 +156,13 @@ class TestPatientDataNegatives:
 
     def test_rg_embedded_in_longer_token_is_legal(self) -> None:
         assert (
-            check_patient_data(
-                'hash = "abc123456789def"\n', "tests/fixture.py", _ROOT
-            )
+            check_patient_data('hash = "abc123456789def"\n', "tests/fixture.py", _ROOT)
             == []
         )
 
     def test_short_numeric_sequence_is_legal(self) -> None:
         assert (
-            check_patient_data('codigo = "12345678"\n', "tests/fixture.py", _ROOT)
-            == []
+            check_patient_data('codigo = "12345678"\n', "tests/fixture.py", _ROOT) == []
         )
 
     def test_plain_text_is_legal(self) -> None:
