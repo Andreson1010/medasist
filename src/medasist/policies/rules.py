@@ -65,7 +65,7 @@ _PATIENT_DATA_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "RG",
         re.compile(
             r"(?<![A-Za-z0-9])(?:\d{1,2}\.\d{3}\.\d{3}-?[0-9A-Za-z]"
-            r"|\d{1,2}\d{3}\d{3}-?[A-Za-z])(?![A-Za-z0-9])"
+            r"|\d{7,8}(?:-[0-9A-Za-z]|[A-Za-z]))(?![A-Za-z0-9])"
         ),
     ),
     ("SUS", re.compile(r"(?<![A-Za-z0-9])\d{15}(?![A-Za-z0-9])")),

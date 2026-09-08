@@ -22,6 +22,14 @@ def _rg_letter() -> str:
     return "12.345.678" + "-X"
 
 
+def _rg_compact_digit() -> str:
+    return "12345678" + "-9"
+
+
+def _rg_compact_letter() -> str:
+    return "12345678" + "X"
+
+
 def _sus() -> str:
     return "12345678" + "9012345"
 
@@ -65,6 +73,19 @@ class TestPatientDataPositives:
     def test_rg_with_letter_check_digit_is_violation(self) -> None:
         violations = check_patient_data(
             f'rg = "{_rg_letter()}"\n', "tests/fixture.py", _ROOT
+        )
+        assert len(violations) == 1
+
+    def test_rg_compact_with_digit_check_digit_is_violation(self) -> None:
+        violations = check_patient_data(
+            f'rg = "{_rg_compact_digit()}"\n', "tests/fixture.py", _ROOT
+        )
+        assert len(violations) == 1
+        assert "RG" in violations[0].message
+
+    def test_rg_compact_with_letter_check_digit_is_violation(self) -> None:
+        violations = check_patient_data(
+            f'rg = "{_rg_compact_letter()}"\n', "tests/fixture.py", _ROOT
         )
         assert len(violations) == 1
 
@@ -130,6 +151,20 @@ class TestPatientDataNegatives:
             check_patient_data(
                 'hash = "abc12345678900def"\n', "tests/fixture.py", _ROOT
             )
+            == []
+        )
+
+    def test_rg_embedded_in_longer_token_is_legal(self) -> None:
+        assert (
+            check_patient_data(
+                'hash = "abc123456789def"\n', "tests/fixture.py", _ROOT
+            )
+            == []
+        )
+
+    def test_short_numeric_sequence_is_legal(self) -> None:
+        assert (
+            check_patient_data('codigo = "12345678"\n', "tests/fixture.py", _ROOT)
             == []
         )
 
