@@ -8,3 +8,18 @@ regressões.
 """
 
 from __future__ import annotations
+
+from medasist.policies.baseline import BaselineEntry, load_baseline, save_baseline
+from medasist.policies.report import PolicyReport, PolicyViolation
+from medasist.policies.scanner import collect_files, generate_baseline, run_scan
+
+__all__ = [
+    "PolicyViolation",
+    "PolicyReport",
+    "BaselineEntry",
+    "collect_files",
+    "run_scan",
+    "generate_baseline",
+    "load_baseline",
+    "save_baseline",
+]
