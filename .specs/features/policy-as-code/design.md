@@ -266,7 +266,9 @@ reason = "carve-out stdout de CLI (OQ-03): relatório legível em terminal; cobe
 | `policies.toml` ausente | `load_baseline` → tupla vazia; todas as violações contam como novas | exit 1 com lista completa (nada mascarado) |
 | `policies.toml` malformado (TOML inválido) | `load_baseline` lança; CLI captura → `logger.error` + exit 1 | Mensagem clara de erro de baseline |
 | Arquivo `.py` ilegível (encoding) | scanner pula o arquivo e registra no relatório (files_skipped) | Listado no relatório; exit 1 (não silencioso) |
-| Diretório root inexistente | `collect_files` ignora (sem erro); `files_scanned=0` | Relatório vazio, exit 0 se baseline válida — documentado |
+| Diretório root inexistente / raiz vazia (sem `.py`) | `collect_files` retorna vazio; `files_scanned=0` | **exit 1** — "nenhum arquivo .py varrido — verifique raízes/exclusões" (nunca falso-verde; comportamento alterado por code review — antes era exit 0) |
+| Raiz sob diretório oculto (ex.: checkout em `~/.projetos/medasist`) | Exclusão por segmento oculto vale **só dentro da subárvore varrida** (relativo à base); ancestrais das raízes não são avaliados | Scan normal; corrige false-green de code review (MEDIUM-2) |
+| `PATIENT-DATA` encontrado | Nunca é **auto-baselinado** (`generate_baseline` pula a regra); entrada manual ainda funciona (backward compat); CLI imprime "regra de segurança não é baselinável — corrija" | exit 1 obrigatório; débito de segurança só se corrige (MEDIUM-4) |
 | Erro inesperado de regra (bug) | CLI captura `Exception` genérico → `logger.exception` + exit 1 | Falha ruidosa, nunca falso-verde |
 | pre-commit hook falha | pre-commit bloqueia commit com saída do hook | Dev corrige antes de commitar (AC-16) |
 | CI policy step falha | Job vermelho, PR bloqueado, deploy não dispara | AC-17/21 |
@@ -291,16 +293,16 @@ reason = "carve-out stdout de CLI (OQ-03): relatório legível em terminal; cobe
 
 Regra **estática** (regex sobre o texto, por linha), padrões PT-BR ancorados com `\b`:
 
-| Padrão | Regex | Exemplo casa | Nota anti-falso-positivo |
-|--------|-------|--------------|--------------------------|
-| CPF | `(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)` | `123.456.789-00`, `12345678900` | `\b`/lookaround para não casar números embutidos |
-| RG | `(?<!\d)\d{1,2}\.?\d{3}\.?\d{3}-?[0-9A-Za-z](?!\d)` | `12.345.678-9`, `12.345.678-X` | dígito verificador alfanumérico (SP) |
-| Cartão SUS | `(?<!\d)\d{15}(?!\d)` | 15 dígitos contíguos | só 15 dígitos exatos |
-| Telefone/WhatsApp (BR) | `(?<!\d)\(?\d{2}\)?[ ]?\d{4,5}-?\d{4}(?!\d)` | `(11) 91234-5678`, `11912345678` | DDD obrigatório (2 dígitos) |
-| E-mail | `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}` | `paciente@exemplo.com` | padrão clássico |
+| Padrão | Regex (implementado) | Exemplo casa | Nota anti-falso-positivo |
+|--------|----------------------|--------------|--------------------------|
+| CPF | `(?<![A-Za-z0-9])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![A-Za-z0-9])` | `123.456.789-00`, `12345678900` | lookarounds alfanuméricos: não casa números embutidos em token maior |
+| RG | `(?<![A-Za-z0-9])(?:\d{1,2}\.\d{3}\.\d{3}-?[0-9A-Za-z]\|\d{7,8}(?:-[0-9A-Za-z]\|[A-Za-z]))(?![A-Za-z0-9])` | `12.345.678-9`, `12.345.678-X`, `12345678-9`, `12345678X` | pontilhado aceita dígito/letra; **compacto exige traço ou letra** (não casa sequência numérica nua como `123456789`); dígito verificador alfanumérico (SP) |
+| Cartão SUS | `(?<![A-Za-z0-9])\d{15}(?![A-Za-z0-9])` | 15 dígitos contíguos | só 15 dígitos exatos, não embutidos |
+| Telefone/WhatsApp (BR) | `(?<![A-Za-z0-9])(?:\([1-9]\d\)\|[1-9]\d)[ ]?\d{4,5}-?\d{4}(?![A-Za-z0-9])` | `(11) 91234-5678`, `11912345678` | DDD obrigatório e **válido (11–99)**; não casa chaves de admin `0123...` |
+| E-mail | `(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9])` | `paciente@exemplo.com` | padrão clássico, não embutido em token maior |
 | Data de nascimento | `\b\d{2}/\d{2}/\d{4}\b` com ano em `1920..<ano atual>` | `15/03/1985` | range etário evita casar datas de documento/versão fora do plausível |
 
-**Allowlist (OQ-05):** tokens exatos (case-insensitive) em `[allowlist.patient_data]` do `policies.toml` — nomes/fixtures sintéticos do repositório: `Zolatril`, `Alphazol`, `Betazol`, `Gammacol`, `amoxicilina`, `ibuprofeno`, `omeprazol`, `dipirona`, `paracetamol` e demais fármacos fictícios dos fixtures. Semântica: se o match completo **ou** a linha contém um token allowlistado, o match é suprimido. Além disso, qualquer match residual pode ser baselinado por `(PATIENT-DATA, path, linha)` — escape hatch documentado.
+**Allowlist (OQ-05, refinada por code review MEDIUM-3):** tokens em `[allowlist.patient_data]` do `policies.toml` — nomes/fixtures sintéticos do repositório: `Zolatril`, `Alphazol`, `Betazol`, `Gammacol`, `amoxicilina`, `ibuprofeno`, `omeprazol`, `dipirona`, `paracetamol`, `insulina` e demais fármacos dos fixtures. Semântica: a suppressão é **por linha** quando a linha contém um **token inteiro** (regex `\b<token>\b`, case-insensitive) — substrings como `amoxicilinaX` **não** suprimem. O **default do código** (`rules.py`) contém apenas tokens puramente sintéticos (`Zolatril`, `Alphazol`, `Betazol`, `Gammacol`, `wrong-key`); nomes genéricos reais (`amoxicilina`, `dipirona`, `ibuprofeno`, `omeprazol`, `paracetamol`, `insulina`) são decisão **explicita do projeto** e vivem no `policies.toml`, não no código — assim o default é estrito e o projeto opta por expandi-lo. Além disso, **`PATIENT-DATA` nunca é auto-baselinado**: o gerador pula a regra (MEDIUM-4); uma entrada manual `(PATIENT-DATA, path, linha)` ainda funciona como escape hatch de último recurso, mas a regra de segurança só se **corrige**.
 
 **Riscos mitigados:** datas em docstrings/versões (range etário), números de 11 dígitos (CPF só com `\b`), fixtures com números (allowlist + baseline), CRLF (scan por linha com `splitlines`).
 

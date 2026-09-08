@@ -60,6 +60,20 @@ allowlist de tokens sintéticos e escape-hatch por baseline são o mecanismo
 documentado para fixtures) são implementados e testados conforme estas emendas;
 a "árvore passa no 1º commit" (AC-01/02) depende delas.
 
+**Emendas pós-review (code review, MEDIUM-2/3/4):**
+- **Zero arquivos varridos → exit 1** (MEDIUM-2): raiz inexistente, raiz vazia
+  ou exclusões que eliminam tudo agora falham o gate com
+  "nenhum arquivo .py varrido — verifique raízes/exclusões". Nunca falso-verde.
+  Ancestrais ocultos das raízes (ex.: checkout em `~/.projetos/medasist`) não
+  excluem arquivos — só segmentos ocultos dentro da subárvore varrida.
+- **Allowlist de paciente por token inteiro + default estrito** (MEDIUM-3):
+  suppressão é por linha quando um token **completo** (`\b<token>\b`) aparece;
+  substrings não suprimem. O default do código tem só tokens sintéticos;
+  nomes genéricos reais (amoxicilina etc.) vivem no `policies.toml` do projeto.
+- **PATIENT-DATA nunca é auto-baselinado** (MEDIUM-4): o `--baseline-generate`
+  pula a regra de segurança; o CLI imprime "regra de segurança não é
+  baselinável — corrija o dado". Entrada manual ainda funciona (backward compat).
+
 ---
 
 ## User Stories
@@ -178,6 +192,10 @@ a "árvore passa no 1º commit" (AC-01/02) depende delas.
 - WHEN um arquivo usa CRLF (Windows) THEN a contagem de linhas para limites 50/4/800 SHALL normalizar `\r\n` antes de contar (Windows/pwsh).
 - WHEN o caminho usa `\` (Windows) THEN a chave de baseline SHALL normalizar para `/` (POSIX) para matching estável entre SOs.
 - WHEN um path extra é passado (`--path`) que inclui `.opencode/` ou `.agents/` THEN as exclusões obrigatórias SHALL continuar valendo (OQ-08).
+- WHEN a varredura não encontra nenhum arquivo `.py` (raiz inexistente, raiz vazia ou exclusões que eliminam tudo) THEN o CLI SHALL exit 1 com "nenhum arquivo .py varrido" — nunca falso-verde (MEDIUM-2).
+- WHEN a raiz da varredura fica sob diretório oculto (ex.: `~/.projetos/medasist`) THEN os ancestrais ocultos SHALL NOT excluir os arquivos — a exclusão por segmento oculto vale só dentro da subárvore varrida (MEDIUM-2).
+- WHEN uma linha contém um token da allowlist de paciente por **token inteiro** (`\b<token>\b`) THEN o match de PATIENT-DATA na linha SHALL ser suprimido; substrings (ex.: `amoxicilinaX`) SHALL NOT suprimir (MEDIUM-3).
+- WHEN `PATIENT-DATA` é encontrado THEN o CLI SHALL exit 1 e NUNCA gerar entrada de baseline automática (o gerador pula a regra; o CLI orienta "não é baselinável — corrija"); entrada manual continua funcionando (MEDIUM-4).
 - WHEN a baseline não existe e há violações THEN o CLI SHALL exit 1 listando tudo (nenhuma violação é mascarada por ausência de baseline).
 - WHEN a baseline tem entrada inativa (`active=false`) THEN ela SHALL ser ignorada (não suprime violação, não é obsoleta).
 - WHEN uma violação é corrigida mas a entrada de baseline permanece THEN o CLI SHALL exit 1 (AC-15) com a lista de entradas obsoletas a remover.
