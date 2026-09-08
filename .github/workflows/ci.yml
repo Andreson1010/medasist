@@ -40,6 +40,9 @@ jobs:
       - name: Lint (ruff check)
         run: ruff check src/ tests/ scripts/
 
+      - name: Policy check (convenções AGENTS.md + regras de segurança)
+        run: python scripts/policy_check.py src tests scripts
+
       - name: Testes (pytest + gate de cobertura)
         run: pytest
 
