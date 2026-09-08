@@ -14,9 +14,9 @@ from __future__ import annotations
 import ast
 import logging
 import re
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 from medasist.policies.report import PolicyViolation
 
@@ -130,8 +130,10 @@ def _parent_map(tree: ast.AST) -> dict[int, ast.AST]:
 
 def _is_docstring_stmt(node: ast.stmt) -> bool:
     """Indica se um statement é uma docstring (Expr de string constante)."""
-    return isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(
-        node.value.value, str
+    return (
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
     )
 
 
@@ -139,9 +141,12 @@ def _docstring_value_ids(tree: ast.AST) -> set[int]:
     """Retorna os ids dos nós de string que são docstrings de módulo/classe/função."""
     ids: set[int] = set()
     for node in ast.walk(tree):
-        if isinstance(
-            node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ) and node.body:
+        if (
+            isinstance(
+                node, ast.Module | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+            )
+            and node.body
+        ):
             first = node.body[0]
             if _is_docstring_stmt(first):
                 ids.add(id(first.value))
@@ -174,7 +179,17 @@ def _is_regex_call(call: ast.Call) -> bool:
         and isinstance(call.func.value, ast.Name)
         and call.func.value.id == "re"
         and call.func.attr
-        in ("compile", "search", "match", "sub", "findall", "finditer", "split", "fullmatch", "escape")
+        in (
+            "compile",
+            "search",
+            "match",
+            "sub",
+            "findall",
+            "finditer",
+            "split",
+            "fullmatch",
+            "escape",
+        )
     )
 
 
@@ -197,7 +212,9 @@ def _target_name(target: ast.AST) -> str | None:
     return None
 
 
-def check_future_import(text: str, path: str, root: Path) -> list[PolicyViolation]:
+def check_future_import(
+    text: str, path: str, root: Path, allowlist: frozenset[str] | None = None
+) -> list[PolicyViolation]:
     """Valida a convenção ``from __future__ import annotations``.
 
     A primeira instrução executável do módulo (após docstring opcional) deve
@@ -257,7 +274,7 @@ def _is_path_named_assign(node: ast.Constant, parent: ast.AST | None) -> bool:
     ``file``, ``dir`` ou ``output``; o valor deve ter separador ou extensão de
     arquivo conhecida.
     """
-    if not isinstance(parent, (ast.Assign, ast.AnnAssign)):
+    if not isinstance(parent, ast.Assign | ast.AnnAssign):
         return False
     target = parent.targets[0] if isinstance(parent, ast.Assign) else parent.target
     name = _target_name(target)
@@ -267,28 +284,16 @@ def _is_path_named_assign(node: ast.Constant, parent: ast.AST | None) -> bool:
     return "/" in value or "\\" in value or value.lower().endswith(_PATH_EXTENSIONS)
 
 
-def check_pathlib(text: str, path: str, root: Path) -> list[PolicyViolation]:
+def check_pathlib(
+    text: str, path: str, root: Path, allowlist: frozenset[str] | None = None
+) -> list[PolicyViolation]:
     """Valida a convenção de usar ``pathlib.Path`` em vez de strings brutas.
 
     Sinaliza strings usadas como caminho: primeiro argumento do builtin
     ``open(...)``, prefixo de drive Windows ou atribuição a variável de nome
     sugestivo (path/file/dir/output) com separador ou extensão de arquivo.
-    Strings dentro de ``Path(...)``/``str(...)``, docstrings, URLs, placeholders
-    e padrões regex são ignoradas.
-
-    Parameters
-    ----------
-    text : str
-        Conteúdo do arquivo.
-    path : str
-        Caminho POSIX relativo do arquivo.
-    root : Path
-        Raiz da varredura (não usado por esta regra).
-
-    Returns
-    -------
-    list[PolicyViolation]
-        Violações da regra ``PATHLIB``, se houver.
+    Strings em ``Path(...)``/``str(...)``, docstrings, URLs, placeholders e
+    padrões regex são ignoradas.
     """
     tree = ast.parse(text)
     parents = _parent_map(tree)
@@ -333,12 +338,14 @@ def _enclosing_symbol(node: ast.AST, parents: dict[int, ast.AST]) -> str:
     current: ast.AST | None = node
     while current is not None:
         current = parents.get(id(current))
-        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(current, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             return current.name
     return "<module>"
 
 
-def check_no_print(text: str, path: str, root: Path) -> list[PolicyViolation]:
+def check_no_print(
+    text: str, path: str, root: Path, allowlist: frozenset[str] | None = None
+) -> list[PolicyViolation]:
     """Valida a proibição de ``print()`` (usar logger/sys.stdout).
 
     Toda chamada ``print(...)`` é violação; a localização simbólica
@@ -380,7 +387,9 @@ def check_no_print(text: str, path: str, root: Path) -> list[PolicyViolation]:
     return violations
 
 
-def check_logger(text: str, path: str, root: Path) -> list[PolicyViolation]:
+def check_logger(
+    text: str, path: str, root: Path, allowlist: frozenset[str] | None = None
+) -> list[PolicyViolation]:
     """Valida a declaração de logger em módulos de ``src/``.
 
     Módulos sob ``src/`` (exceto ``__init__.py``) com conteúdo executável
@@ -406,11 +415,14 @@ def check_logger(text: str, path: str, root: Path) -> list[PolicyViolation]:
     if _first_executable(module) is None:
         return []
     for stmt in module.body:
-        if isinstance(stmt, (ast.Assign, ast.AnnAssign)):
+        if isinstance(stmt, ast.Assign | ast.AnnAssign):
             targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
             if not any(isinstance(t, ast.Name) and t.id == "logger" for t in targets):
                 continue
-            if isinstance(stmt.value, ast.Call) and _call_name(stmt.value.func) == "getLogger":
+            if (
+                isinstance(stmt.value, ast.Call)
+                and _call_name(stmt.value.func) == "getLogger"
+            ):
                 return []
     return [
         _violation(
@@ -446,20 +458,26 @@ def _check_symbol_docstring(
         )
     if isinstance(node, ast.ClassDef):
         for stmt in node.body:
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and not stmt.name.startswith("_"):
-                if not (stmt.body and _is_docstring_stmt(stmt.body[0])):
-                    violations.append(
-                        _violation(
-                            "DOCSTRING",
-                            path,
-                            stmt.lineno,
-                            f"método público '{node.name}.{stmt.name}' deve ter docstring",
-                            symbol=stmt.name,
-                        )
+            if (
+                isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef)
+                and not stmt.name.startswith("_")
+                and not (stmt.body and _is_docstring_stmt(stmt.body[0]))
+            ):
+                violations.append(
+                    _violation(
+                        "DOCSTRING",
+                        path,
+                        stmt.lineno,
+                        f"método público '{node.name}.{stmt.name}' "
+                        "deve ter docstring",
+                        symbol=stmt.name,
                     )
+                )
 
 
-def check_docstring(text: str, path: str, root: Path) -> list[PolicyViolation]:
+def check_docstring(
+    text: str, path: str, root: Path, allowlist: frozenset[str] | None = None
+) -> list[PolicyViolation]:
     """Valida docstrings em símbolos públicos de código ``src/``.
 
     Apenas a presença de docstring é verificada; o estilo NumPy completo é
@@ -484,19 +502,19 @@ def check_docstring(text: str, path: str, root: Path) -> list[PolicyViolation]:
     tree = ast.parse(text)
     violations: list[PolicyViolation] = []
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             _check_symbol_docstring(node, path, violations)
     return violations
 
 
 def _block_children(node: ast.AST) -> list[ast.AST]:
     """Retorna os statements dos corpos de bloco de um statement composto."""
-    if isinstance(node, (ast.If, ast.For, ast.AsyncFor, ast.While)):
+    if isinstance(node, ast.If | ast.For | ast.AsyncFor | ast.While):
         return [*node.body, *node.orelse]
     if isinstance(node, ast.Try):
         handlers = [stmt for handler in node.handlers for stmt in handler.body]
         return [*node.body, *handlers, *node.orelse, *node.finalbody]
-    if isinstance(node, (ast.With, ast.AsyncWith)):
+    if isinstance(node, ast.With | ast.AsyncWith):
         return list(node.body)
     if isinstance(node, ast.Match):
         return [stmt for case in node.cases for stmt in case.body]
@@ -551,7 +569,9 @@ def _check_function_complexity(
         )
 
 
-def check_complexity(text: str, path: str, root: Path) -> list[PolicyViolation]:
+def check_complexity(
+    text: str, path: str, root: Path, allowlist: frozenset[str] | None = None
+) -> list[PolicyViolation]:
     """Valida os limites de código 50/4/800 em arquivos de ``src/``.
 
     Sub-regras: ``FUNC-LENGTH`` (span físico do ``def``, limite 50 inclusivo),
@@ -578,7 +598,7 @@ def check_complexity(text: str, path: str, root: Path) -> list[PolicyViolation]:
     tree = ast.parse(text)
     violations: list[PolicyViolation] = []
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             _check_function_complexity(node, path, violations)
     num_lines = len(text.splitlines())
     if num_lines > _MAX_FILE_LINES:

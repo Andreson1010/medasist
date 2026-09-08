@@ -12,9 +12,10 @@ from __future__ import annotations
 import logging
 import os
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from medasist.policies.report import PolicyViolation
@@ -127,6 +128,30 @@ def load_baseline(path: Path) -> tuple[BaselineEntry, ...]:
             )
         )
     return tuple(entries)
+
+
+def load_allowlist(path: Path) -> frozenset[str]:
+    """Carrega os tokens sintéticos de ``[allowlist.patient_data]``.
+
+    Arquivo ausente ou seção ausente retorna um conjunto vazio; as fixtures
+    sintéticas padrão de ``rules.py`` continuam sempre ativas.
+
+    Parameters
+    ----------
+    path : Path
+        Caminho do arquivo ``policies.toml``.
+
+    Returns
+    -------
+    frozenset[str]
+        Tokens configurados, minúsculos, para suppressão de PATIENT-DATA.
+    """
+    if not path.exists():
+        return frozenset()
+    with path.open("rb") as handle:
+        data = tomllib.load(handle)
+    raw = data.get("allowlist", {}).get("patient_data", [])
+    return frozenset(str(token).lower() for token in raw)
 
 
 def _escape(value: str) -> str:
