@@ -41,7 +41,7 @@ class TestDocstring:
         )
         violations = check_docstring(text, "src/foo.py", _ROOT)
         assert len(violations) == 1
-        assert violations[0].symbol == "run"
+        assert violations[0].symbol == "Foo.run"
 
     def test_public_method_with_docstring_is_legal(self) -> None:
         text = (
