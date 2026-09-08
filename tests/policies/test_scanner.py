@@ -220,3 +220,23 @@ class TestGenerateBaseline:
         src = tmp_path / "src"
         _write(src, "ok.py", _CLEAN_PY)
         assert generate_baseline([src]) == ()
+
+    def test_does_not_generate_patient_data_entries(self, tmp_path: Path) -> None:
+        # Regra de segurança NUNCA é auto-baselinada (MEDIUM-4).
+        src = tmp_path / "src"
+        cpf = "123" + ".456" + ".789-00"
+        content = (
+            "from __future__ import annotations\n"
+            "\n"
+            "import logging\n"
+            "\n"
+            "logger = logging.getLogger(__name__)\n"
+            "\n"
+            f'cpf = "{cpf}"\n'
+            'print("x")\n'
+        )
+        _write(src, "bad.py", content)
+        entries = generate_baseline([src])
+        rules = {e.rule_id for e in entries}
+        assert "NO-PRINT" in rules
+        assert "PATIENT-DATA" not in rules

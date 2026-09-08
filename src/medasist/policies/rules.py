@@ -468,7 +468,7 @@ def _check_symbol_docstring(
                         stmt.lineno,
                         f"método público '{node.name}.{stmt.name}' "
                         "deve ter docstring",
-                        symbol=stmt.name,
+                        symbol=f"{node.name}.{stmt.name}",
                     )
                 )
 

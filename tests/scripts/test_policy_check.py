@@ -136,6 +136,17 @@ class TestMainExitCodes:
         args = [str(tmp_path), "--baseline", str(tmp_path / "nao.toml")]
         assert main(args) == 1
 
+    def test_patient_data_violation_prints_not_baselinable(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        src = tmp_path / "src"
+        cpf = "123" + ".456" + ".789-00"
+        _write(src, "bad.py", f'{_CLEAN_PY}\ncpf = "{cpf}"\n')
+        result = main([str(src), "--baseline", str(tmp_path / "nao.toml")])
+        assert result == 1
+        captured = capsys.readouterr().out
+        assert "não é baselinável" in captured
+
 
 class TestRender:
     def test_render_mentions_rule_and_file(self, tmp_path: Path) -> None:

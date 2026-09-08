@@ -98,6 +98,10 @@ def _render(report: PolicyReport) -> str:
     for v in report.new_violations:
         symbol = f" ({v.symbol})" if v.symbol else ""
         lines.append(f"  [{v.rule_id}] {v.path}:{v.line}{symbol} — {v.message}")
+    if any(v.rule_id == "PATIENT-DATA" for v in report.new_violations):
+        lines.append(
+            "PATIENT-DATA: regra de segurança não é baselinável — corrija o dado"
+        )
     if report.obsolete_entries:
         lines.append(
             f"Baseline obsoleta ({len(report.obsolete_entries)}): "

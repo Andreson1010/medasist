@@ -204,6 +204,11 @@ class TestMatch:
         baseline = (_entry(),)
         assert match(baseline, "FUNC-LENGTH", "src/other.py", "_run_single") is None
 
+    def test_patient_data_entry_still_matches(self) -> None:
+        # Entrada PATIENT-DATA escrita à mão continua funcional (backward compat)
+        baseline = (_entry(rule_id="PATIENT-DATA", path="src/x.py", location="42"),)
+        assert match(baseline, "PATIENT-DATA", "src/x.py", "42") == baseline[0]
+
     def test_inactive_entry_never_suppresses(self) -> None:
         baseline = (_entry(active=False),)
         assert (

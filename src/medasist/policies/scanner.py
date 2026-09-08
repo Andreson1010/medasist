@@ -235,13 +235,25 @@ def run_scan(
     )
 
 
-def _default_reason(rule_id: str) -> str:
+def _default_reason(
+    rule_id: str,
+    path: str | None = None,
+    location: str | None = None,
+) -> str:
     """Retorna o motivo padrão de baseline por regra.
+
+    O carve-out de NO-PRINT só se aplica ao relatório do CLI
+    (``scripts/evaluate_rag.py:_print_report``); outros prints pré-existentes
+    recebem motivo que orienta a correção para logger.
 
     Parameters
     ----------
     rule_id : str
         Identificador da regra.
+    path : str | None
+        Caminho POSIX relativo do arquivo (usado por NO-PRINT).
+    location : str | None
+        Localização simbólica (usado por NO-PRINT).
 
     Returns
     -------
@@ -251,7 +263,9 @@ def _default_reason(rule_id: str) -> str:
     if rule_id in ("FUNC-LENGTH", "NESTING-DEPTH"):
         return "débito AD-005 (limite de código pré-existente)"
     if rule_id == "NO-PRINT":
-        return "carve-out stdout de CLI (OQ-03)"
+        if path == "scripts/evaluate_rag.py" and location == "_print_report":
+            return "carve-out stdout de CLI (OQ-03)"
+        return "print() pré-existente (corrigir para logger)"
     return "débito pré-existente"
 
 
@@ -287,12 +301,16 @@ def generate_baseline(
             continue
         for _rule_id, checker in RULE_REGISTRY:
             for violation in checker(text, rel, base, allowlist=None):
+                if violation.rule_id == "PATIENT-DATA":
+                    # Regra de segurança nunca é auto-baselinada (MEDIUM-4):
+                    # só se corrige o dado; gerar baseline a mascararia.
+                    continue
                 location = violation.symbol if violation.symbol else str(violation.line)
                 entry = BaselineEntry(
                     rule_id=violation.rule_id,
                     path=violation.path,
                     location=location,
-                    reason=_default_reason(violation.rule_id),
+                    reason=_default_reason(violation.rule_id, violation.path, location),
                 )
                 if entry not in entries:
                     entries.append(entry)
