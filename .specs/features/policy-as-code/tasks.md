@@ -11,6 +11,15 @@ Notas de gate (TESTING.md + pyproject.toml vigentes):
 - Padrão de teste de script: `from policy_check import ...` (via pythonpath), `mocker.patch`, argv lists, assert exit 0/1, `capsys`.
 - Commits em PT-BR, imperativo, um por task (padrão AGENTS.md): `feat(policies): <descrição>`.
 
+Notas de pós-review (code review, MEDIUM-2/3/4 — vinculantes):
+- Varredura com **zero arquivos** (`files_scanned==0`) falha o gate (exit 1);
+  raiz sob diretório oculto não exclui arquivos (só segmentos dentro da
+  subárvore varrida).
+- Allowlist de paciente por **token inteiro** (`\b<token>\b`); default do código
+  tem só tokens sintéticos; nomes genéricos reais ficam no `policies.toml`.
+- **PATIENT-DATA nunca é auto-baselinado** — `generate_baseline` (T10/T12) pula a
+  regra; entrada manual ainda funciona.
+
 ---
 
 ## Execution Plan
