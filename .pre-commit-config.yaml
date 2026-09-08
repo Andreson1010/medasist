@@ -1,0 +1,34 @@
+# Hooks locais de qualidade (repo: local, language: system).
+# Usam o venv ativo com as versões pinadas em requirements-dev.txt /
+# requirements.lock — sem baixar ambientes isolados.
+#
+# Fallback (Windows/pwsh): python -m pre-commit run --all-files
+#
+# Gotcha: um .env local com linhas de comentário com valor quebra o pytest;
+# rode os hooks com o .env movido (mesmo procedimento da suíte local).
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black (formatação)
+        entry: black --check src/ tests/ scripts/
+        language: system
+        types: [python]
+
+      - id: ruff
+        name: ruff (lint)
+        entry: ruff check src/ tests/ scripts/
+        language: system
+        types: [python]
+
+      - id: medasist-policy
+        name: policy check (convenções AGENTS.md + regras de segurança)
+        entry: python scripts/policy_check.py src tests scripts
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest (testes + gate de cobertura)
+        entry: pytest
+        language: system
+        pass_filenames: false
