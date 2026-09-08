@@ -93,6 +93,8 @@ def _render(report: PolicyReport) -> str:
     ]
     if report.files_skipped:
         lines.append("Arquivos ilegíveis: falha o gate (corrija a codificação/leitura)")
+    if report.files_scanned == 0:
+        lines.append("nenhum arquivo .py varrido — verifique raízes/exclusões")
     for v in report.new_violations:
         symbol = f" ({v.symbol})" if v.symbol else ""
         lines.append(f"  [{v.rule_id}] {v.path}:{v.line}{symbol} — {v.message}")

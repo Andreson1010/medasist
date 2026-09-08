@@ -60,13 +60,33 @@ class TestPolicyReport:
             violations=(),
             baseline_entries=(),
             obsolete_entries=(),
-            files_scanned=0,
+            files_scanned=1,
             files_skipped=0,
         )
         assert report.new_violations == ()
         assert report.baselined_violations == ()
         assert report.total_violations == 0
         assert report.has_failures is False
+
+    def test_zero_files_scanned_is_failure(self) -> None:
+        report = PolicyReport(
+            violations=(),
+            baseline_entries=(),
+            obsolete_entries=(),
+            files_scanned=0,
+            files_skipped=0,
+        )
+        assert report.has_failures is True
+
+    def test_skipped_files_is_failure(self) -> None:
+        report = PolicyReport(
+            violations=(),
+            baseline_entries=(),
+            obsolete_entries=(),
+            files_scanned=1,
+            files_skipped=1,
+        )
+        assert report.has_failures is True
 
     def test_new_violations_filters_baseline_flag(self) -> None:
         new = _violation()
