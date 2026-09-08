@@ -109,7 +109,12 @@ class PolicyReport:
         Returns
         -------
         bool
-            ``True`` quando há violações novas ou entradas de baseline
-            obsoletas a limpar.
+            ``True`` quando há violações novas, entradas de baseline obsoletas
+            a limpar ou arquivos pulados por erro de leitura (nunca
+            falso-verde).
         """
-        return bool(self.new_violations) or bool(self.obsolete_entries)
+        return (
+            bool(self.new_violations)
+            or bool(self.obsolete_entries)
+            or self.files_skipped > 0
+        )

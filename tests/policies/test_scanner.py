@@ -140,7 +140,7 @@ class TestRunScan:
         with pytest.raises(tomllib.TOMLDecodeError):
             run_scan([src], baseline_path=baseline)
 
-    def test_unreadable_file_is_skipped(self, tmp_path: Path) -> None:
+    def test_unreadable_file_fails_the_gate(self, tmp_path: Path) -> None:
         src = tmp_path / "src"
         target = src / "broken.py"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +148,20 @@ class TestRunScan:
         report = run_scan([src], baseline_path=tmp_path / "nao-existe.toml")
         assert report.files_scanned == 0
         assert report.files_skipped == 1
+        # arquivo ilegível nunca é falso-verde: falha o gate (AC/design)
+        assert report.has_failures is True
+
+    def test_unreadable_file_still_counts_skipped_with_other_files(
+        self, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "src"
+        _write(src, "ok.py", _CLEAN_PY)
+        target = src / "broken.py"
+        target.write_bytes(b"\xff\xfe invalido")
+        report = run_scan([src], baseline_path=tmp_path / "nao-existe.toml")
+        assert report.files_scanned == 1
+        assert report.files_skipped == 1
+        assert report.has_failures is True
 
     def test_relative_paths_are_posix(self, tmp_path: Path) -> None:
         src = tmp_path / "src"
