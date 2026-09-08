@@ -99,7 +99,7 @@ class TestLoadAllowlist:
     def test_loads_tokens_lowercased(self, tmp_path: Path) -> None:
         path = tmp_path / "policies.toml"
         path.write_text(
-            '[allowlist.patient_data]\n'
+            "[allowlist.patient_data]\n"
             'tokens = ["Zolatril", "Alphazol", "amoxicilina"]\n',
             encoding="utf-8",
         )
@@ -112,7 +112,7 @@ class TestLoadAllowlist:
 
     def test_missing_section_returns_empty(self, tmp_path: Path) -> None:
         path = tmp_path / "policies.toml"
-        path.write_text("[[entries]]\nrule_id = \"X\"\n", encoding="utf-8")
+        path.write_text('[[entries]]\nrule_id = "X"\n', encoding="utf-8")
         assert load_allowlist(path) == frozenset()
 
 
