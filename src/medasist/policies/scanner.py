@@ -279,9 +279,7 @@ def generate_baseline(
             continue
         for _rule_id, checker in RULE_REGISTRY:
             for violation in checker(text, rel, base, allowlist=None):
-                location = (
-                    violation.symbol if violation.symbol else str(violation.line)
-                )
+                location = violation.symbol if violation.symbol else str(violation.line)
                 entry = BaselineEntry(
                     rule_id=violation.rule_id,
                     path=violation.path,

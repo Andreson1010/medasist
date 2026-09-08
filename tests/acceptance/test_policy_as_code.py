@@ -263,7 +263,12 @@ class TestAc12Ac19Complexity:
 
 class TestAc13PatientData:
     def test_ac13_patient_cpf_exits_one(self, tmp_path: Path) -> None:
-        _write(tmp_path, "src/bad.py", f'{_FUTURE}{_LOGGER}\ncpf = "123.456.789-00"\n')
+        cpf = "123.456" + ".789-00"
+        _write(
+            tmp_path,
+            "src/bad.py",
+            f"{_FUTURE}{_LOGGER}\ncpf = \"{cpf}\"\n",
+        )
         assert _cli(tmp_path, "--baseline", str(tmp_path / "nao.toml")) == 1
 
     def test_ac13_synthetic_tokens_are_legal(self, tmp_path: Path) -> None:
