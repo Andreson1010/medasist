@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -65,6 +66,28 @@ PROMPT_TEMPLATES: dict[UserProfile, str] = {
 }
 
 
+_PROFILE_LLM_ACCESSORS: dict[
+    UserProfile, tuple[Callable[[Settings], float], Callable[[Settings], int]]
+] = {
+    UserProfile.MEDICO: (
+        lambda settings: settings.medico_temperature,
+        lambda settings: settings.medico_max_tokens,
+    ),
+    UserProfile.ENFERMEIRO: (
+        lambda settings: settings.enfermeiro_temperature,
+        lambda settings: settings.enfermeiro_max_tokens,
+    ),
+    UserProfile.ASSISTENTE: (
+        lambda settings: settings.assistente_temperature,
+        lambda settings: settings.assistente_max_tokens,
+    ),
+    UserProfile.PACIENTE: (
+        lambda settings: settings.paciente_temperature,
+        lambda settings: settings.paciente_max_tokens,
+    ),
+}
+
+
 @dataclass(frozen=True)
 class ProfileConfig:
     """Configuração imutável de LLM para um perfil de usuário.
@@ -105,30 +128,27 @@ def get_profile_config(
     Raises
     ------
     ValueError
-        Se ``Settings`` não possuir os atributos esperados para o perfil,
+        Se o perfil não tiver acessadores de ``Settings`` mapeados,
         ou se o perfil não tiver template configurado.
     """
     if settings is None:
         settings = get_settings()
 
-    key = profile.value
-    attr_temp = f"{key}_temperature"
-    attr_tokens = f"{key}_max_tokens"
+    accessors = _PROFILE_LLM_ACCESSORS.get(profile)
+    if accessors is None:
+        raise ValueError(f"Perfil sem configuração de LLM mapeada: {profile!r}")
 
-    if not hasattr(settings, attr_temp) or not hasattr(settings, attr_tokens):
-        raise ValueError(
-            f"Settings não possui atributos para o perfil '{key}'. "
-            f"Esperados: '{attr_temp}', '{attr_tokens}'."
-        )
-
-    temperature = getattr(settings, attr_temp)
-    max_tokens = getattr(settings, attr_tokens)
     prompt_template = PROMPT_TEMPLATES.get(profile)
-
     if prompt_template is None:
         raise ValueError(f"Perfil sem template configurado: {profile!r}")
 
-    logger.debug("ProfileConfig carregado: profile=%s temperature=%s", key, temperature)
+    read_temperature, read_max_tokens = accessors
+    temperature = read_temperature(settings)
+    max_tokens = read_max_tokens(settings)
+
+    logger.debug(
+        "ProfileConfig carregado: profile=%s temperature=%s", profile.value, temperature
+    )
 
     return ProfileConfig(
         temperature=temperature,

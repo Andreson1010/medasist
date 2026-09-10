@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from medasist.config import Settings
+from medasist.profiles import schemas as profiles_schemas
 from medasist.profiles.schemas import (
     PROMPT_TEMPLATES,
     ProfileConfig,
@@ -102,6 +103,35 @@ class TestGetProfileConfig:
         for profile in UserProfile:
             config = get_profile_config(profile, settings=default_settings)
             assert isinstance(config, ProfileConfig)
+
+
+class TestProfileLlmAccessors:
+    def test_all_profiles_have_accessors(self):
+        for profile in UserProfile:
+            assert (
+                profile in profiles_schemas._PROFILE_LLM_ACCESSORS
+            ), f"Perfil '{profile.value}' sem acessadores tipados de Settings"
+
+    def test_accessors_read_settings_fields(self, default_settings: Settings):
+        read_temp, read_tokens = profiles_schemas._PROFILE_LLM_ACCESSORS[
+            UserProfile.PACIENTE
+        ]
+        assert read_temp(default_settings) == default_settings.paciente_temperature
+        assert read_tokens(default_settings) == default_settings.paciente_max_tokens
+
+    def test_unmapped_profile_raises_value_error(
+        self, default_settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(profiles_schemas, "_PROFILE_LLM_ACCESSORS", {})
+        with pytest.raises(ValueError, match="sem configuração de LLM"):
+            get_profile_config(UserProfile.MEDICO, settings=default_settings)
+
+    def test_missing_template_raises_value_error(
+        self, default_settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(profiles_schemas, "PROMPT_TEMPLATES", {})
+        with pytest.raises(ValueError, match="sem template"):
+            get_profile_config(UserProfile.MEDICO, settings=default_settings)
 
 
 class TestMaxUploadMb:

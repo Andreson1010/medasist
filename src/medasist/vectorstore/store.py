@@ -10,16 +10,9 @@ from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 
 from medasist.config import Settings
-from medasist.ingestion.schemas import DocType
+from medasist.ingestion.schemas import DocType, collection_name
 
 logger = logging.getLogger(__name__)
-
-_COLLECTION_ATTR: dict[DocType, str] = {
-    DocType.BULA: "collection_bulas",
-    DocType.DIRETRIZ: "collection_diretrizes",
-    DocType.PROTOCOLO: "collection_protocolos",
-    DocType.MANUAL: "collection_manuais",
-}
 
 _client: chromadb.PersistentClient | None = None
 _client_path: Path | None = None
@@ -88,13 +81,6 @@ def build_embeddings(settings: Settings) -> OpenAIEmbeddings:
     )
 
 
-def _collection_name(doc_type: DocType, settings: Settings) -> str:
-    attr = _COLLECTION_ATTR.get(doc_type)
-    if attr is None:
-        raise ValueError(f"DocType sem coleção mapeada: {doc_type!r}")
-    return getattr(settings, attr)
-
-
 def get_vectorstore(
     doc_type: DocType,
     client: chromadb.ClientAPI,
@@ -124,7 +110,7 @@ def get_vectorstore(
     RuntimeError
         Se o ChromaDB não conseguir criar ou abrir a coleção.
     """
-    name = _collection_name(doc_type, settings)
+    name = collection_name(doc_type, settings)
     try:
         store = Chroma(
             client=client,

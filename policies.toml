@@ -93,12 +93,6 @@ reason = "débito pré-existente"
 
 [[entries]]
 rule_id = "FUNC-LENGTH"
-path = "src/medasist/profiles/schemas.py"
-location = "get_profile_config"
-reason = "débito AD-005 (limite de código pré-existente)"
-
-[[entries]]
-rule_id = "FUNC-LENGTH"
 path = "src/medasist/retrieval/retriever.py"
 location = "retrieve"
 reason = "débito AD-005 (limite de código pré-existente)"
@@ -176,9 +170,7 @@ location = "_print_report"
 reason = "carve-out stdout de CLI (OQ-03)"
 
 [allowlist.patient_data]
-# Tokens sintéticos de fixtures (fármacos/protocolos fictícios) — suprimem
-# PATIENT-DATA quando a linha contém um destes tokens (case-insensitive).
-# Adicione novos tokens sintéticos conforme novos fixtures entrarem no repo.
+# Tokens sintéticos de fixtures — preservados pelo --baseline-generate
 tokens = [
     "Zolatril",
     "Alphazol",
