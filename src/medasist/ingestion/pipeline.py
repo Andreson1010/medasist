@@ -11,18 +11,11 @@ from medasist.config import Settings
 from medasist.ingestion.chunker import chunk_document
 from medasist.ingestion.loader import load_pdf
 from medasist.ingestion.metadata import build_metadata_batch
-from medasist.ingestion.schemas import DocType
+from medasist.ingestion.schemas import DocType, collection_name
 
 logger = logging.getLogger(__name__)
 
 EmbedFn = Callable[[list[str]], list[list[float]]]
-
-_COLLECTION_ATTR: dict[DocType, str] = {
-    DocType.BULA: "collection_bulas",
-    DocType.DIRETRIZ: "collection_diretrizes",
-    DocType.PROTOCOLO: "collection_protocolos",
-    DocType.MANUAL: "collection_manuais",
-}
 
 
 @dataclass(frozen=True)
@@ -78,10 +71,6 @@ def build_embed_fn(settings: Settings) -> EmbedFn:
         chunk_size=settings.embedding_batch_size,
     )
     return embeddings.embed_documents
-
-
-def _collection_name(doc_type: DocType, settings: Settings) -> str:
-    return getattr(settings, _COLLECTION_ATTR[doc_type])
 
 
 def _metadata_page(page: int | None) -> int:
@@ -144,7 +133,7 @@ def ingest_document(
     if embed_fn is None:
         embed_fn = build_embed_fn(settings)
 
-    col_name = _collection_name(doc_type, settings)
+    col_name = collection_name(doc_type, settings)
     collection = chroma_client.get_or_create_collection(name=col_name)
 
     try:
