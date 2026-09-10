@@ -492,7 +492,9 @@ class TestSettingsDecompose:
 
 class TestSettingsGenerationStreaming:
     def test_default_is_false(self) -> None:
-        settings = Settings(admin_api_key=SecretStr("very-strong-key-0123456789"))
+        settings = Settings(
+            _env_file=None, admin_api_key=SecretStr("very-strong-key-0123456789")
+        )
         assert settings.generation_streaming_enabled is False
 
     def test_env_override_true(self, monkeypatch) -> None:

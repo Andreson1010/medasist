@@ -437,7 +437,10 @@ class TestQueryStream:
         assert response.status_code == 422
 
     def test_disabled_flag_returns_404(self, client: TestClient) -> None:
-        response = client.post("/query/stream", json=VALID_PAYLOAD)
+        settings = MagicMock()
+        settings.generation_streaming_enabled = False
+        with patch("medasist.api.routers.query.get_settings", return_value=settings):
+            response = client.post("/query/stream", json=VALID_PAYLOAD)
         assert response.status_code == 404
         assert "text/event-stream" not in response.headers.get("content-type", "")
 
